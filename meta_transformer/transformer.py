@@ -104,18 +104,17 @@ class Classifier(hk.Module):
 
   def __call__(
       self,
-      tokens: jax.Array,
+      input_chunks: jax.Array,
       *,
       is_training: bool = True,
   ) -> jax.Array:
     """Forward pass, producing a sequence of logits."""
-    # input_mask = jnp.greater(tokens, self.pad_token)
-    unused_batch_size, seq_len, input_chunk_size = tokens.shape
+    unused_batch_size, seq_len, input_chunk_size = input_chunks.shape
 
-    # Embed the input tokens and positions.
-    embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
+    # Embed the input_chunks and positions.
+    embed_init = hk.initializers.TruncatedNormal(stddev=0.2)
     embedding = hk.Linear(self.model_size, w_init=embed_init)
-    token_embedding = embedding(tokens)  # [B, T, D]
+    token_embedding = embedding(input_chunks)  # [B, T, D]
 
     positional_embeddings = hk.get_parameter(
         'positional_embeddings', [seq_len, self.model_size], init=embed_init)
