@@ -1,0 +1,9 @@
+chex==0.1.7
+datasets==2.11.0
+dm-haiku==0.0.9
+jax==0.4.8
+jaxlib==0.4.7
+matplotlib==3.7.1
+numpy==1.24.2
+optax==0.1.4
+pandas==2.0.0
