@@ -68,6 +68,22 @@ def count_params(params: dict) -> int:
     return sum([x.size for x in jax.tree_util.tree_leaves(params)])
 
 
+def get_image_patches(image):
+    """Split image into 9 patches."""
+    # crop image to nearest multiple of 3
+    try:
+        image = image[:image.shape[0] // 3 * 3, :image.shape[1] // 3 * 3, :]
+    except:
+        image = image[:image.shape[0] // 3 * 3, :image.shape[1] // 3 * 3]
+
+
+    # split image into 9 patches
+    patches = jnp.split(image, 3, axis=0)
+    patches = jnp.concatenate(patches, axis=1)
+    patches = jnp.array(jnp.split(patches, 9, axis=1))
+    return patches
+
+
 # TODO finish this
 @dataclasses.dataclass
 class Updater:

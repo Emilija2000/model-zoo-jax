@@ -43,21 +43,39 @@ def loss(params, rng, input_chunks, targets, is_training=True):
 
 
 # Data
-train_data, train_labels, test_data, test_labels = mnist()
+def load_mnist():
+    # Load the CIFAR-10 dataset using Hugging Face Datasets
+    dataset = datasets.load_dataset('mnist')
+    dataset = dataset.with_format("jax")
+
+    # Split the dataset into train and test sets
+    train_data, train_labels = dataset['train']["image"], dataset['train']["label"]
+    test_data, test_labels = dataset['test']["image"], dataset['test']["label"]
+    
+    # One-hot encode labels
+    train_labels = jnp.eye(10)[dataset['train']['label']]
+    test_labels = jnp.eye(10)[dataset['test']['label']]
+    
+    return (train_data, train_labels), (test_data, test_labels)
 
 
 BATCH_SIZE = 32
-SEQ_LEN = 14
-CHUNK_SIZE = 784 // SEQ_LEN
+SEQ_LEN = 9
+# CHUNK_SIZE = 784 // SEQ_LEN
 
 
-train_data = train_data.reshape(-1, BATCH_SIZE, SEQ_LEN, CHUNK_SIZE)
+(train_data, train_labels), (test_data, test_labels) = load_mnist()
+train_data, test_data = vmap(utils.get_image_patches)(train_data), vmap(utils.get_image_patches)(test_data)
+
+train_data, test_data = train_data.reshape(-1, BATCH_SIZE, SEQ_LEN, 9*9) / 255, test_data.reshape(-1, SEQ_LEN, 9*9) / 255
 train_labels = train_labels.reshape(-1, BATCH_SIZE, 10)
-test_data = test_data.reshape(-1, SEQ_LEN, CHUNK_SIZE)
 test_labels = test_labels.reshape(-1, 10)
-# TODO normalize inputs
 
 
+# train_data = train_data.reshape(-1, BATCH_SIZE, SEQ_LEN, CHUNK_SIZE) / 255
+# train_labels = train_labels.reshape(-1, BATCH_SIZE, 10)
+# test_data = test_data.reshape(-1, SEQ_LEN, CHUNK_SIZE) / 255
+# test_labels = test_labels.reshape(-1, 10)
 
 
 # Optimizer and update function

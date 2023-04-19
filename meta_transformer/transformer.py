@@ -120,6 +120,13 @@ class Classifier(hk.Module):
         'positional_embeddings', [seq_len, self.model_size], init=embed_init)
     input_embeddings = token_embedding + positional_embeddings  # [B, T, D]
 
+    # Class Token TODO: ablate this
+    class_token = hk.get_parameter(
+        'class_token', [1, 1, self.model_size], init=embed_init)
+    class_token = jnp.tile(class_token, [input_chunks.shape[0], 1, 1])
+    input_embeddings = jnp.concatenate([class_token, input_embeddings], axis=1)
+
+
     # Run the transformer over the inputs.
     embeddings = self.transformer(
         input_embeddings,
