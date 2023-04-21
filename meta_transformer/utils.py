@@ -1,13 +1,91 @@
 import functools
 import jax
 import jax.numpy as jnp
+from jax import jit, vmap, random
 import numpy as np
 import collections
 import dataclasses
 import optax
 from typing import Optional, Mapping, Any
+import datasets
+import dm_pix as pix
 
 
+# Data
+def load_data(dataset_name: str = "mnist"):
+    """Load mnist, cifar10 or cifar100 dataset. Returns train and test datasets."""
+    dataset = datasets.load_dataset(dataset_name)
+    dataset = dataset.with_format("jax")
+    if dataset_name == "mnist":
+        dataset = dataset.rename_column("image", "img")
+        # add dummy channel dimension
+        # dataset["train"]["img"], dataset["test"]["img"] = dataset["train"]["img"][:, :, :, None], dataset["test"]["img"][:, :, :, None]
+        # dataset["train"]["img"], dataset["test"]["img"] = dataset["train"]["img"][:, :, :, None], dataset["test"]["img"][:, :, :, None]
+    else:
+        pass
+    return dataset["train"], dataset["test"]
+
+
+@jit
+def augment_datapoint(rng, img):
+    """Apply a random augmentation to a single image. Pixel values are assumed to be in [0, 1]"""
+    rng = random.split(rng, 6)
+    img = pix.random_brightness(rng[0], img, 0.3)
+    img = pix.random_contrast(rng[1], img, lower=0.2, upper=3)
+    img = pix.random_saturation(rng[2], img, lower=0, upper=3)
+    img = pix.random_flip_left_right(rng[2], img)
+    img = pix.random_flip_up_down(rng[3], img)
+    angle = random.uniform(rng[4], shape=(), minval=0, maxval=360)
+    img = pix.rotate(img, angle)
+    return img
+
+
+def get_image_patches(image: jnp.ndarray) -> jnp.ndarray:
+    """Split image into 9 patches and return flattened patches. Image is 
+    assumed to have shape (H, W, C). 
+    Returns a jnp.array of shape (9, H*W*C/3)."""
+    H, W = image.shape[:2]
+    # crop image to nearest multiple of 3
+    try:
+        image = image[:H // 3 * 3, :W // 3 * 3, :]
+    except:
+        # MNIST has no channel dimension
+        image = image[:H // 3 * 3, :W // 3 * 3]
+
+    # split image into 9 patches
+    patches = jnp.split(image, 3, axis=0)
+    patches = jnp.concatenate(patches, axis=1)
+    patches = jnp.array(jnp.split(patches, 9, axis=1))
+    patches = patches.reshape(9, -1)
+    return patches
+
+
+@jit
+def process_datapoint(rng: jnp.ndarray, img: jnp.array, augment: bool = True) -> jnp.array:
+    img = img / 255.0
+    # Equivalent to:
+    # if augment:
+    #     img = augment_datapoint(rng, img)
+    img = jax.lax.cond(
+            augment, 
+            lambda img: augment_datapoint(rng, img),
+            lambda img: img,
+            img
+        )
+    img = get_image_patches(img)
+    img = img.reshape(9, -1)
+    return img
+
+
+@jit
+def process_batch(rng, batch, augment = True):
+    """apply a random augmentation to a batch of images.
+    input is assumed to be a jnp.array of shape (B, H, W, C) with values in [0, 255]"""
+    rng = random.split(rng, len(batch))
+    return vmap(functools.partial(process_datapoint, augment=augment))(rng, batch)
+
+
+# Parameter chunking
 def pad_to_chunk_size(arr: jnp.ndarray, chunk_size: int) -> jnp.ndarray:
     pad_size = -len(arr) % chunk_size
     padded = jnp.pad(arr, (0, pad_size))
@@ -68,29 +146,13 @@ def count_params(params: dict) -> int:
     return sum([x.size for x in jax.tree_util.tree_leaves(params)])
 
 
-def get_image_patches(image):
-    """Split image into 9 patches."""
-    # crop image to nearest multiple of 3
-    try:
-        image = image[:image.shape[0] // 3 * 3, :image.shape[1] // 3 * 3, :]
-    except:
-        image = image[:image.shape[0] // 3 * 3, :image.shape[1] // 3 * 3]
-
-
-    # split image into 9 patches
-    patches = jnp.split(image, 3, axis=0)
-    patches = jnp.concatenate(patches, axis=1)
-    patches = jnp.array(jnp.split(patches, 9, axis=1))
-    return patches
-
-
 # TODO finish this
 @dataclasses.dataclass
 class Updater:
     """A stateless abstraction around an init_fn/update_fn pair.
     This extracts some common boilerplate from the training loop.
     """
-    _net_init: dict()
+    _net_init: callable
     _loss_fn: callable
     _accuracy_fn: callable
     _opt: optax.GradientTransformation
