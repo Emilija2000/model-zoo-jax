@@ -13,17 +13,23 @@ import dm_pix as pix
 
 # Data
 def load_data(dataset_name: str = "mnist"):
-    """Load mnist, cifar10 or cifar100 dataset. Returns train and test datasets."""
+    """Load mnist, cifar10 or cifar100 dataset."""
     dataset = datasets.load_dataset(dataset_name)
     dataset = dataset.with_format("jax")
-    if dataset_name == "mnist":
-        dataset = dataset.rename_column("image", "img")
-        # add dummy channel dimension
-        # dataset["train"]["img"], dataset["test"]["img"] = dataset["train"]["img"][:, :, :, None], dataset["test"]["img"][:, :, :, None]
-        # dataset["train"]["img"], dataset["test"]["img"] = dataset["train"]["img"][:, :, :, None], dataset["test"]["img"][:, :, :, None]
-    else:
-        pass
-    return dataset["train"], dataset["test"]
+    train, test = dataset["train"], dataset["test"]
+    train_images, train_labels = train["img"], train["label"]
+    test_images, test_labels = test["img"], test["label"]
+    return train_images, train_labels, test_images, test_labels
+
+
+def random_rot90(rng, image):
+    rot = random.bernoulli(rng, 0.5)
+    return jax.lax.cond(
+        rot,
+        lambda img: pix.rot90(img, 1),
+        lambda img: img,
+        image
+    )
 
 
 @jit
@@ -35,8 +41,7 @@ def augment_datapoint(rng, img):
     img = pix.random_saturation(rng[2], img, lower=0, upper=3)
     img = pix.random_flip_left_right(rng[2], img)
     img = pix.random_flip_up_down(rng[3], img)
-    angle = random.uniform(rng[4], shape=(), minval=0, maxval=360)
-    img = pix.rotate(img, angle)
+    img = random_rot90(rng[4], img)
     return img
 
 
@@ -45,18 +50,22 @@ def get_image_patches(image: jnp.ndarray) -> jnp.ndarray:
     assumed to have shape (H, W, C). 
     Returns a jnp.array of shape (9, H*W*C/3)."""
     H, W = image.shape[:2]
-    # crop image to nearest multiple of 3
+    patch_size = 4
+    # pad image to nearest multiple of patch_size
     try:
-        image = image[:H // 3 * 3, :W // 3 * 3, :]
+        image = jnp.pad(image, ((0, H % patch_size), (0, W % patch_size), (0, 0)))
     except:
         # MNIST has no channel dimension
-        image = image[:H // 3 * 3, :W // 3 * 3]
+        image = jnp.pad(image, ((0, H % patch_size), (0, W % patch_size)))
 
-    # split image into 9 patches
-    patches = jnp.split(image, 3, axis=0)
+    # split image into patches
+    num_patches = (H // patch_size) * (W // patch_size)
+    patches = jnp.split(image, H // patch_size, axis=0)
     patches = jnp.concatenate(patches, axis=1)
-    patches = jnp.array(jnp.split(patches, 9, axis=1))
-    patches = patches.reshape(9, -1)
+    patches = jnp.array(jnp.split(patches, 
+                                  num_patches,
+                                  axis=1))
+    patches = patches.reshape(num_patches, -1)
     return patches
 
 
@@ -79,9 +88,9 @@ def process_datapoint(rng: jnp.ndarray,
 #             img
 #         )
     if patch:  # Patches or chunks?
-        img = get_image_patches(img).reshape(9, -1)
+        img = get_image_patches(img).reshape(16, -1)
     else:
-        img = img.reshape(8, -1)
+        img = img.reshape(64, -1, order="F")
     return img
 
 
@@ -124,10 +133,11 @@ def chunk_params(params: dict, chunk_size: int) -> dict:
 def dict_concatenate(dict_list, np_array=False):
     """
     Arguments:
-    * dict_list: a list of dictionaries with the same keys. All values must be numeric or a nested dict.
+    * dict_list: a list of dictionaries with the same keys. All values must
+    be numeric or a nested dict.
     Returns:
-    * a dictionary with the same keys as the input dictionaries. The values are lists
-    consisting of the concatenation of the values in the input dictionaries.
+    * a dictionary with the same keys as the input dictionaries. The values
+    are lists consisting of the concatenation of the values in the input dictionaries.
     """
     for d in dict_list:
         if not isinstance(d, collections.Mapping):
