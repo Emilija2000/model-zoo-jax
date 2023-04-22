@@ -15,6 +15,7 @@ from functools import partial
 import datasets
 import dataclasses
 import functools
+import matplotlib
 
 
 # Model
@@ -134,6 +135,11 @@ def train_mnist(rng_key=random.PRNGKey(42)):
 
 
 if __name__ == "__main__":
+    try:
+        matplotlib.use("TkAgg")
+    except ImportError:
+        pass
+
     info, model, params = train_mnist()
     print("Final training accuracy:", info["train_acc"][-1])
     print("Final test accuracy:", info["val_acc"][-1])
