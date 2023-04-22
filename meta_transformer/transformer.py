@@ -50,7 +50,6 @@ class Transformer(hk.Module):
   def __call__(
       self,
       embeddings: jax.Array,  # [B, T, D]
-#      mask: jax.Array,  # [B, T]
       *,
       is_training: bool = True,
   ) -> jax.Array:  # [B, T, D]
@@ -58,12 +57,7 @@ class Transformer(hk.Module):
 
     initializer = hk.initializers.VarianceScaling(2 / self.num_layers)
     dropout_rate = self.dropout_rate if is_training else 0.
-    _, seq_len, model_size = embeddings.shape
-
-#     # Compute causal mask for autoregressive sequence modelling.
-#     mask = mask[:, None, None, :]  # [B, H=1, T'=1, T]
-#     causal_mask = np.tril(np.ones((1, 1, seq_len, seq_len)))  # [B=1, H=1, T, T]
-#     mask = mask * causal_mask  # [B, H=1, T, T]
+    _, _, model_size = embeddings.shape
 
     h = embeddings
     for _ in range(self.num_layers):
@@ -94,6 +88,27 @@ class Transformer(hk.Module):
 
 
 @dataclasses.dataclass
+class Patches(hk.Module):
+  """A module that extracts patches from an image and flattens them."""
+  patch_size: int
+  embed_dim: int
+
+  def __call__(
+      self,
+      image_batch: jax.Array,  # [B, H, W, C]
+  ) -> jax.Array:  # [B, T, D]
+    conv = hk.Conv2D(
+        output_channels=self.embed_dim,
+        kernel_shape=self.patch_size,
+        stride=self.patch_size,
+        padding='VALID'
+    )
+    patches = conv(image_batch)  # [B, H', W', D]
+    b, h, w, d = patches.shape
+    return jnp.reshape(patches, [b, h * w, d])
+
+
+@dataclasses.dataclass
 class Classifier(hk.Module):
   """A ViT-style classifier."""
 
@@ -104,21 +119,24 @@ class Classifier(hk.Module):
 
   def __call__(
       self,
-      input_chunks: jax.Array,
+      image_batch: jax.Array,
       *,
       is_training: bool = True,
+      patch_size: int = 4,
   ) -> jax.Array:
     """Forward pass. Returns a sequence of logits."""
-    unused_batch_size, seq_len, input_chunk_size = input_chunks.shape
+    extract_patches = Patches(patch_size=patch_size, embed_dim=self.model_size)
+    patches = extract_patches(image_batch)  # [B, T, D]
+    _, seq_len, _ = patches.shape
 
-    # Embed the input_chunks and positions.
+    # Embed the patches and positions.
     embed_init = hk.initializers.TruncatedNormal(stddev=0.2)
     embedding = hk.Linear(self.model_size, w_init=embed_init)
-    token_embedding = embedding(input_chunks)  # [B, T, D]
+    patch_embedding = embedding(patches)  # [B, T, D]
 
     positional_embeddings = hk.get_parameter(
         'positional_embeddings', [seq_len, self.model_size], init=embed_init)
-    input_embeddings = token_embedding + positional_embeddings  # [B, T, D]
+    input_embeddings = patch_embedding + positional_embeddings  # [B, T, D]
 
 #    # Class Token TODO: ablate this
 #    class_token = hk.get_parameter(
@@ -130,7 +148,6 @@ class Classifier(hk.Module):
     # Run the transformer over the inputs.
     embeddings = self.transformer(
         input_embeddings,
-#        input_mask,
         is_training=is_training,
     )  # [B, T, D]
 

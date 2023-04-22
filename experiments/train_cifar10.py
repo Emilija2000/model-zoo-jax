@@ -13,7 +13,6 @@ from typing import Mapping, Any, Tuple, List, Iterator, Optional
 import chex
 import matplotlib
 
-PATCH = False
 AUGMENT = True
 
 # Model
@@ -22,7 +21,6 @@ def forward(image_batch, is_training=True):
     input_chunks = utils.process_batch(
         rng, 
         image_batch, 
-        patch=PATCH, 
         augment=AUGMENT,
     )
     t = transformer.Classifier(
@@ -196,7 +194,7 @@ if __name__ == "__main__":
     LEARNING_RATE = 1e-4
     WEIGHT_DECAY = 1e-4
     BATCH_SIZE = 256
-    NUM_EPOCHS = 25
+    NUM_EPOCHS = 100
 
     steps_per_epoch = 50000 // BATCH_SIZE
 

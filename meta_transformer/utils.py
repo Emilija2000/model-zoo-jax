@@ -32,7 +32,6 @@ def random_rot90(rng, image):
     )
 
 
-@jit
 def augment_datapoint(rng, img):
     """Apply a random augmentation to a single image. Pixel values are assumed to be in [0, 1]"""
     rng = random.split(rng, 6)
@@ -45,62 +44,26 @@ def augment_datapoint(rng, img):
     return img
 
 
-def get_image_patches(image: jnp.ndarray) -> jnp.ndarray:
-    """Split image into 9 patches and return flattened patches. Image is 
-    assumed to have shape (H, W, C). 
-    Returns a jnp.array of shape (9, H*W*C/3)."""
-    H, W = image.shape[:2]
-    patch_size = 4
-    # pad image to nearest multiple of patch_size
-    try:
-        image = jnp.pad(image, ((0, H % patch_size), (0, W % patch_size), (0, 0)))
-    except:
-        # MNIST has no channel dimension
-        image = jnp.pad(image, ((0, H % patch_size), (0, W % patch_size)))
-
-    # split image into patches
-    num_patches = (H // patch_size) * (W // patch_size)
-    patches = jnp.split(image, H // patch_size, axis=0)
-    patches = jnp.concatenate(patches, axis=1)
-    patches = jnp.array(jnp.split(patches, 
-                                  num_patches,
-                                  axis=1))
-    patches = patches.reshape(num_patches, -1)
-    return patches
-
-
 def process_datapoint(rng: jnp.ndarray, 
                       img: jnp.array,
-                      patch: bool = False,
                       augment: bool = True) -> jnp.array:
     img = img / 255.0
-    img = jax.lax.cond(  # Augment?
+    img = jax.lax.cond(  # Random augment?
             augment, 
             lambda img: augment_datapoint(rng, img),
             lambda img: img,
             img
         )
-    
-#     img = jax.lax.cond(  # Patches or chunks?
-#             patch,
-#             lambda img: get_image_patches(img).reshape(9, -1),
-#             lambda img: img.reshape(9, -1),  # simple chunking for CIFAR10
-#             img
-#         )
-    if patch:  # Patches or chunks?
-        img = get_image_patches(img).reshape(16, -1)
-    else:
-        img = img.reshape(64, -1, order="F")
     return img
 
 
 @functools.partial(jit, static_argnums=2)
-def process_batch(rng, batch, patch = False, augment = True):
-    """apply a random augmentation to a batch of images.
-    input is assumed to be a jnp.array of shape (B, H, W, C) with 
-    values in [0, 255]. Return augmented and reshaped batch."""
+def process_batch(rng, batch, augment = True):
+    """Apply a random augmentation to a batch of images.
+    Input is assumed to be a jnp.array of shape (B, H, W, C) with 
+    values in [0, 255]."""
     rng = random.split(rng, len(batch))
-    proc = functools.partial(process_datapoint, patch=patch, augment=augment)
+    proc = functools.partial(process_datapoint, augment=augment)
     return vmap(proc)(rng, batch)
 
 
@@ -130,7 +93,7 @@ def chunk_params(params: dict, chunk_size: int) -> dict:
     }
 
 
-def dict_concatenate(dict_list, np_array=False):
+def dict_concatenate(dict_list, np_array=False): # TODO: make prettier
     """
     Arguments:
     * dict_list: a list of dictionaries with the same keys. All values must
@@ -164,65 +127,3 @@ def dict_concatenate(dict_list, np_array=False):
 def count_params(params: dict) -> int:
     """Count the number of parameters in a dictionary of parameters."""
     return sum([x.size for x in jax.tree_util.tree_leaves(params)])
-
-
-# TODO finish this
-@dataclasses.dataclass
-class Updater:
-    """A stateless abstraction around an init_fn/update_fn pair.
-    This extracts some common boilerplate from the training loop.
-    """
-    _net_init: callable
-    _loss_fn: callable
-    _accuracy_fn: callable
-    _opt: optax.GradientTransformation
-
-    @functools.partial(jax.jit, static_argnums=0)
-    def init(self, rng, data):
-        """Initializes state of the updater."""
-        out_rng, init_rng = jax.random.split(rng)
-        params = self._net_init(init_rng, data['text'])
-        params = {k: dict(v) for k, v in params.items()}  # unfreeze
-        opt_state = self._opt.init(params)
-        out = dict(
-            step=np.array(0),
-            rng=out_rng,
-            opt_state=opt_state,
-            params=params,
-        )
-        return out
-
-    @functools.partial(jax.jit, static_argnums=0)
-    def update(self, state: Mapping[str, Any], data: Mapping[str, jnp.ndarray]):
-        """Updates the state using some data and returns metrics."""
-        rng, new_rng = jax.random.split(state['rng'])
-        params = state['params']
-        loss, g = jax.value_and_grad(self._loss_fn)(params, rng, data)
-
-        updates, opt_state = self._opt.update(g, state['opt_state'], params)
-        params = optax.apply_updates(params, updates)
-
-        new_state = {
-            'step': state['step'] + 1,
-            'rng': new_rng,
-            'opt_state': opt_state,
-            'params': params,
-        }
-
-        metrics = {
-            'step': state['step'],
-            'train/loss': loss,
-        }
-        return new_state, metrics
-    
-    @functools.partial(jax.jit, static_argnums=0)
-    def validate(self, state: Mapping[str, Any], val_data: Mapping[str, jnp.ndarray]):
-        params = state['params']
-        loss = self._loss_fn(params, None, val_data, is_training=False)
-        
-        val_metrics = {
-            'step': state['step']-1,
-            'validation/loss': loss,
-            'validation/accuracy': self._accuracy_fn(params, val_data),
-        }
-        return val_metrics
