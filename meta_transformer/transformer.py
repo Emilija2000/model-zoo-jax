@@ -95,7 +95,7 @@ class Transformer(hk.Module):
 
 @dataclasses.dataclass
 class Classifier(hk.Module):
-  """An autoregressive transformer-based language model."""
+  """A ViT-style classifier."""
 
   transformer: Transformer
   model_size: int
@@ -108,7 +108,7 @@ class Classifier(hk.Module):
       *,
       is_training: bool = True,
   ) -> jax.Array:
-    """Forward pass, producing a sequence of logits."""
+    """Forward pass. Returns a sequence of logits."""
     unused_batch_size, seq_len, input_chunk_size = input_chunks.shape
 
     # Embed the input_chunks and positions.
@@ -120,11 +120,11 @@ class Classifier(hk.Module):
         'positional_embeddings', [seq_len, self.model_size], init=embed_init)
     input_embeddings = token_embedding + positional_embeddings  # [B, T, D]
 
-    # Class Token TODO: ablate this
-    class_token = hk.get_parameter(
-        'class_token', [1, 1, self.model_size], init=embed_init)
-    class_token = jnp.tile(class_token, [input_chunks.shape[0], 1, 1])
-    input_embeddings = jnp.concatenate([class_token, input_embeddings], axis=1)
+#    # Class Token TODO: ablate this
+#    class_token = hk.get_parameter(
+#        'class_token', [1, 1, self.model_size], init=embed_init)
+#    class_token = jnp.tile(class_token, [input_chunks.shape[0], 1, 1])
+#    input_embeddings = jnp.concatenate([class_token, input_embeddings], axis=1)
 
 
     # Run the transformer over the inputs.
