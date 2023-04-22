@@ -60,29 +60,39 @@ def get_image_patches(image: jnp.ndarray) -> jnp.ndarray:
     return patches
 
 
-@jit
-def process_datapoint(rng: jnp.ndarray, img: jnp.array, augment: bool = True) -> jnp.array:
+def process_datapoint(rng: jnp.ndarray, 
+                      img: jnp.array,
+                      patch: bool = False,
+                      augment: bool = True) -> jnp.array:
     img = img / 255.0
-    # Equivalent to:
-    # if augment:
-    #     img = augment_datapoint(rng, img)
-    img = jax.lax.cond(
+    img = jax.lax.cond(  # Augment?
             augment, 
             lambda img: augment_datapoint(rng, img),
             lambda img: img,
             img
         )
-    img = get_image_patches(img)
-    img = img.reshape(9, -1)
+    
+#     img = jax.lax.cond(  # Patches or chunks?
+#             patch,
+#             lambda img: get_image_patches(img).reshape(9, -1),
+#             lambda img: img.reshape(9, -1),  # simple chunking for CIFAR10
+#             img
+#         )
+    if patch:  # Patches or chunks?
+        img = get_image_patches(img).reshape(9, -1)
+    else:
+        img = img.reshape(8, -1)
     return img
 
 
-@jit
-def process_batch(rng, batch, augment = True):
+@functools.partial(jit, static_argnums=2)
+def process_batch(rng, batch, patch = False, augment = True):
     """apply a random augmentation to a batch of images.
-    input is assumed to be a jnp.array of shape (B, H, W, C) with values in [0, 255]"""
+    input is assumed to be a jnp.array of shape (B, H, W, C) with 
+    values in [0, 255]. Return augmented and reshaped batch."""
     rng = random.split(rng, len(batch))
-    return vmap(functools.partial(process_datapoint, augment=augment))(rng, batch)
+    proc = functools.partial(process_datapoint, patch=patch, augment=augment)
+    return vmap(proc)(rng, batch)
 
 
 # Parameter chunking
