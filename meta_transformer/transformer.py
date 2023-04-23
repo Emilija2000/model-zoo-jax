@@ -116,16 +116,16 @@ class Classifier(hk.Module):
   model_size: int
   num_classes: int
   name: Optional[str] = None
+  patch_size: int = 4
 
   def __call__(
       self,
       image_batch: jax.Array,
       *,
       is_training: bool = True,
-      patch_size: int = 4,
   ) -> jax.Array:
     """Forward pass. Returns a sequence of logits."""
-    extract_patches = Patches(patch_size=patch_size, embed_dim=self.model_size)
+    extract_patches = Patches(patch_size=self.patch_size, embed_dim=self.model_size)
     patches = extract_patches(image_batch)  # [B, T, D]
     _, seq_len, _ = patches.shape
 
