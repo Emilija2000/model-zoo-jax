@@ -14,26 +14,31 @@ import chex
 import matplotlib
 
 AUGMENT = True
+DATA_MEAN = 0.473
+DATA_STD = 0.251
+
 
 # Model
 def forward(image_batch, is_training=True):
     rng = hk.next_rng_key()
-    input_chunks = utils.process_batch(
+    image_batch = utils.process_batch(
         rng, 
         image_batch, 
         augment=AUGMENT,
     )
+    image_batch = (image_batch - DATA_MEAN) / DATA_STD
     t = transformer.Classifier(
         transformer=transformer.Transformer(
+            # I think we want model_size = key_size * num_heads
             num_heads=8,
             num_layers=6,
-            key_size=64,
+            key_size=32,
             dropout_rate=0.1,
         ),
-        model_size=128,
+        model_size=256,
         num_classes=10,
     )
-    return t(input_chunks, is_training=is_training)
+    return t(image_batch, is_training=is_training)
 
 
 model = hk.transform(forward)
@@ -191,9 +196,9 @@ if __name__ == "__main__":
     except ImportError:
         pass
     rng = random.PRNGKey(42)
-    LEARNING_RATE = 1e-4
-    WEIGHT_DECAY = 1e-4
-    BATCH_SIZE = 256
+    LEARNING_RATE = 5e-5
+    WEIGHT_DECAY = 5e-5
+    BATCH_SIZE = 128
     NUM_EPOCHS = 100
 
     steps_per_epoch = 50000 // BATCH_SIZE
@@ -209,7 +214,7 @@ if __name__ == "__main__":
         "img": train_images[:2], 
         "label": train_labels[:2]
         })
-    print("Number of parameters:", sum([x.size for x in jax.tree_util.tree_leaves(state.params)]) / 1e6, "Million")
+    print("Number of parameters:", utils.count_params(state.params) / 1e6, "Million")
     metrics_list = []
 
     fig, axs = plt.subplots(1, 2, figsize=(9, 4))
@@ -240,6 +245,3 @@ if __name__ == "__main__":
     print("Final validation accuracy:", metrics["val/acc"][-1])
     lines = plot_metrics(metrics, axs, lines=lines)
     plt.show()
-
-
-
