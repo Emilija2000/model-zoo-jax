@@ -14,6 +14,7 @@ import chex
 import matplotlib
 
 AUGMENT = True
+PLOT = True
 DATA_MEAN = 0.473
 DATA_STD = 0.251
 
@@ -154,6 +155,8 @@ def data_iterator(images: jnp.ndarray, labels: jnp.ndarray, batchsize: int = 104
 
 # Plotting
 def plot_metrics(metrics, axs: np.ndarray, prefix: str = "", lines: Optional[list] = None):
+    if not PLOT:
+        return None
     if isinstance(metrics, list):
         metrics = utils.dict_concatenate(metrics)
         metrics = {k: np.array(v) for k, v in metrics.items()}
@@ -222,21 +225,18 @@ if __name__ == "__main__":
     lines = None
 
     # Training loop
-    try:
-        for epoch in range(NUM_EPOCHS):
-            rng, subkey = random.split(rng)
-            images, labels = shuffle_data(subkey, train_images, train_labels)
-            batches = data_iterator(images, labels, batchsize=BATCH_SIZE, skip_last=True)
-            for batch in batches:
-                if state.step % 150 == 0:
-                    state, metrics = updater.compute_metrics(
-                        state, batch, test_data)
-                    metrics_list.append(metrics)
-                    print("Epoch:", epoch, "Step:", state.step, "Train acc:", metrics["train/acc"], "Val acc:", metrics["val/acc"])
-                    lines = plot_metrics(metrics_list, axs, lines=lines)
-                state = updater.update(state, batch)
-    except KeyboardInterrupt:
-        pass
+    for epoch in range(NUM_EPOCHS):
+        rng, subkey = random.split(rng)
+        images, labels = shuffle_data(subkey, train_images, train_labels)
+        batches = data_iterator(images, labels, batchsize=BATCH_SIZE, skip_last=True)
+        for batch in batches:
+            if state.step % 150 == 0:
+                state, metrics = updater.compute_metrics(
+                    state, batch, test_data)
+                metrics_list.append(metrics)
+                print("Epoch:", epoch, "Step:", state.step, "Train acc:", metrics["train/acc"], "Val acc:", metrics["val/acc"])
+                lines = plot_metrics(metrics_list, axs, lines=lines)
+            state = updater.update(state, batch)
 
 
     # Plot
