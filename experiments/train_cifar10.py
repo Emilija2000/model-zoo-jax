@@ -12,13 +12,15 @@ import functools
 from typing import Mapping, Any, Tuple, List, Iterator, Optional
 import chex
 import matplotlib
+import wandb
 
 AUGMENT = True
-PLOT = True
+USE_WANDB = True
 DATA_MEAN = 0.473
 DATA_STD = 0.251
 
 
+# TODO don't augment at test time
 # Model
 def forward(image_batch, is_training=True):
     rng = hk.next_rng_key()
@@ -44,39 +46,37 @@ def forward(image_batch, is_training=True):
 
 model = hk.transform(forward)
 
+def acc_from_logits(logits, targets):
+    """expects index targets, not one-hot"""
+    predictions = jnp.argmax(logits, axis=-1)
+    return jnp.mean(predictions == targets)
 
-@functools.partial(jit, static_argnums=3)
-def loss(params, rng, data, is_training=True):
-    """data is a dict with keys 'img' and 'label'."""
-    images, targets = data["img"], data["label"]
+
+def loss_from_logits(logits, targets):
+    """targets are index labels"""
     targets = nn.one_hot(targets, 10)
-    logits = model.apply(params, rng, images, is_training)[:, 0, :]  # [B, C]
     chex.assert_equal_shape([logits, targets])
     return -jnp.sum(targets * nn.log_softmax(logits, axis=-1), axis=-1).mean()
 
 
-# Metrics
 @functools.partial(jit, static_argnums=3)
-def accuracy(rng, params, data, is_training=True):
-    """data is a dict with keys 'img' and 'label'. labels are NOT one-hot."""
-    targets, inputs = data["label"], data["img"]
-    logits = model.apply(params, rng, inputs, is_training)[:, 0, :]
-    predictions = jnp.argmax(logits, axis=-1)
-    return jnp.mean(predictions == targets)
+def loss_fn(params, rng, data, is_training=True):
+    """data is a dict with keys 'img' and 'label'."""
+    images, targets = data["img"], data["label"]
+    logits = model.apply(params, rng, images, is_training)[:, 0, :]  # [B, C]
+    loss = loss_from_logits(logits, targets)
+    acc = acc_from_logits(logits, targets)
+    return loss, acc
 
 
 @jit
 def val_metrics(rng, params, val_data):
     """Compute acc and loss on test set."""
-    rngs = random.split(rng)
-    acc = accuracy(rngs[0], params, val_data, is_training=False)
-    l = loss(params, rngs[1], val_data, is_training=False)
-    return {"val/acc": acc, "val/loss": l}
+    loss, acc = loss_fn(params, rng, val_data, is_training=False)
+    return {"val/acc": acc, "val/loss": loss}
 
 
 # Optimizer and update function
-
-
 @chex.dataclass
 class TrainState:
     step: int
@@ -104,37 +104,47 @@ class Updater: # Could also make this a function of loss_fn, model.apply, etc if
         )
     
     @functools.partial(jit, static_argnums=0)
-    def update(self, state: TrainState, data: dict) -> TrainState:
+    def update(self, state: TrainState, data: dict) -> Tuple[TrainState, dict]:
         state.rng, *subkeys = jax.random.split(state.rng, 3)
-        grads = grad(loss)(state.params, subkeys[1], data)       
+        (loss, acc), grads = value_and_grad(loss_fn, has_aux=True)(
+                state.params, subkeys[1], data)
         updates, state.opt_state = self.opt.update(
             grads, state.opt_state, state.params)
         state.params = optax.apply_updates(state.params, updates)
         state.step += 1
-        return state
+        metrics = {
+                "train/loss": loss,
+                "train/acc": acc,
+                "step": state.step,
+        }
+        return state, metrics
+
 
     @functools.partial(jit, static_argnums=0)
-    def compute_validation_metrics(self, 
-                                   state: TrainState, 
-                                   data: dict) -> Tuple[TrainState, dict]:
+    def compute_val_metrics(self, 
+                            state: TrainState, 
+                            data: dict) -> Tuple[TrainState, dict]:
         state.rng, subkey = random.split(state.rng)
         return state, val_metrics(subkey, state.params, data)
-    
-    @functools.partial(jit, static_argnums=0)
-    def compute_metrics(self, 
-                        state: TrainState, 
-                        train_data: dict, 
-                        val_data: dict) -> Tuple[TrainState, dict]:
-        state.rng, *subkeys = random.split(state.rng, 4)
-        train_acc = accuracy(subkeys[1], state.params, train_data)
-        train_loss = loss(state.params, subkeys[2], train_data)
-        state, val_metrics = self.compute_validation_metrics(state, val_data)
-        return state, {
-            "train/acc": train_acc,
-            "train/loss": train_loss,
-            "step": state.step,
-            **val_metrics
-            }
+
+
+@chex.dataclass
+class Logger:
+    # TODO: keep state for metrics instead of just pushing to wandb?
+    # TODO: log mean of train_acc and train_loss
+    log_interval: int = 50
+
+    def log(self,
+            state: TrainState,
+            train_metrics: dict,
+            val_metrics: dict = None):
+        metrics = train_metrics
+        if val_metrics is not None:
+            metrics.update(val_metrics)
+        metrics = {k: float(v) for k, v in metrics.items() if k != "step"}
+        if state.step % self.log_interval == 0 or val_metrics is not None:
+            print(", ".join([f"{k}: {round(v, 3)}" for k, v in metrics.items()]))
+            wandb.log(metrics, step=state.step)
 
 
 def shuffle_data(rng: jnp.ndarray, images: jnp.ndarray, labels: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -153,56 +163,24 @@ def data_iterator(images: jnp.ndarray, labels: jnp.ndarray, batchsize: int = 104
                    label=labels[i:i + batchsize])
 
 
-# Plotting
-def plot_metrics(metrics, axs: np.ndarray, prefix: str = "", lines: Optional[list] = None):
-    if not PLOT:
-        return None
-    if isinstance(metrics, list):
-        metrics = utils.dict_concatenate(metrics)
-        metrics = {k: np.array(v) for k, v in metrics.items()}
-
-    if lines is None:  # First call - initialize plot
-        # acc
-        ax = axs[0]
-        ta, = ax.plot(metrics["step"], metrics["train/acc"], label=prefix + "train acc")
-        va, = ax.plot(metrics["step"], metrics["val/acc"], label=prefix + "val acc")
-        ax.set_ylabel("Training Accuracy")
-        ax.set_xlabel("Step")
-        ax.legend()
-
-        # loss
-        ax = axs[1]
-        tl, = ax.plot(metrics["step"], metrics["train/loss"], label=prefix + "train loss")
-        vl, = ax.plot(metrics["step"], metrics["val/loss"], label=prefix + "val loss")
-        ax.set_ylabel("Training Loss")
-        ax.set_xlabel("Step")
-        ax.set_yscale("log")
-        ax.legend()
-        lines = [ta, va, tl, vl]
-        return lines
-    else:  # Update lines
-        lines[0].set_data(metrics["step"], metrics["train/acc"])
-        lines[1].set_data(metrics["step"], metrics["val/acc"])
-        lines[2].set_data(metrics["step"], metrics["train/loss"])
-        lines[3].set_data(metrics["step"], metrics["val/loss"])
-        axs[0].autoscale_view()
-        axs[0].relim()
-        axs[1].autoscale_view()
-        axs[1].relim()
-        plt.pause(.05)
-        return lines
-
-
 if __name__ == "__main__":
-    try:
-        matplotlib.use("TkAgg")
-    except ImportError:
-        pass
     rng = random.PRNGKey(42)
     LEARNING_RATE = 5e-5
     WEIGHT_DECAY = 5e-5
     BATCH_SIZE = 128
     NUM_EPOCHS = 100
+
+    wandb.init(
+        mode="online" if USE_WANDB else "disabled",
+        project="meta-models",
+        config={
+            "data_augmentation": AUGMENT,
+            "dataset": "CIFAR-10",
+            "lr": LEARNING_RATE,
+            "weight_decay": WEIGHT_DECAY,
+            "batchsize": BATCH_SIZE,
+            "num_epochs": NUM_EPOCHS,
+        })  # TODO properly set and log config
 
     steps_per_epoch = 50000 // BATCH_SIZE
 
@@ -213,13 +191,14 @@ if __name__ == "__main__":
     # Initialization
     opt = optax.adamw(LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     updater = Updater(opt=opt)
-    state = updater.init_params(rng, {
+    logger = Logger(log_interval=50)
+    rng, subkey = random.split(rng)
+    state = updater.init_params(subkey, {
         "img": train_images[:2], 
         "label": train_labels[:2]
         })
-    print("Number of parameters:", utils.count_params(state.params) / 1e6, "Million")
-    metrics_list = []
 
+    print("Number of parameters:", utils.count_params(state.params) / 1e6, "Million")
     fig, axs = plt.subplots(1, 2, figsize=(9, 4))
     fig.tight_layout()
     lines = None
@@ -229,19 +208,11 @@ if __name__ == "__main__":
         rng, subkey = random.split(rng)
         images, labels = shuffle_data(subkey, train_images, train_labels)
         batches = data_iterator(images, labels, batchsize=BATCH_SIZE, skip_last=True)
+
         for batch in batches:
+            state, train_metrics = updater.update(state, batch)
             if state.step % 150 == 0:
-                state, metrics = updater.compute_metrics(
-                    state, batch, test_data)
-                metrics_list.append(metrics)
-                print("Epoch:", epoch, "Step:", state.step, "Train acc:", metrics["train/acc"], "Val acc:", metrics["val/acc"])
-                lines = plot_metrics(metrics_list, axs, lines=lines)
-            state = updater.update(state, batch)
-
-
-    # Plot
-    metrics = utils.dict_concatenate(metrics_list)
-    print("Final training accuracy:", metrics["train/acc"][-1])
-    print("Final validation accuracy:", metrics["val/acc"][-1])
-    lines = plot_metrics(metrics, axs, lines=lines)
-    plt.show()
+                state, val_metrics = updater.compute_val_metrics(state, test_data)
+                logger.log(state, train_metrics, val_metrics)
+            else:
+                logger.log(state, train_metrics)
