@@ -20,14 +20,13 @@ DATA_MEAN = 0.473
 DATA_STD = 0.251
 
 
-# TODO don't augment at test time
 # Model
 def forward(image_batch, is_training=True):
     rng = hk.next_rng_key()
     image_batch = utils.process_batch(
         rng, 
         image_batch, 
-        augment=AUGMENT,
+        augment=AUGMENT if is_training else False,
     )
     image_batch = (image_batch - DATA_MEAN) / DATA_STD
     t = transformer.Classifier(
