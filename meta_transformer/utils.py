@@ -23,6 +23,7 @@ def load_data(dataset_name: str = "mnist"):
 
 
 def random_rot90(rng, image):
+    """randomly rotate the image 50% of the time"""
     rot = random.bernoulli(rng, 0.5)
     return jax.lax.cond(
         rot,
@@ -45,8 +46,8 @@ def random_resized_crop(rng, image):
 def augment_datapoint(rng, img):
     """Apply a random augmentation to a single image. Pixel values are assumed to be in [0, 1]"""
     rng = random.split(rng, 7)
-    img = pix.random_brightness(rng[0], img, 0.3)
-    img = pix.random_contrast(rng[1], img, lower=0.2, upper=3)
+#    img = pix.random_brightness(rng[0], img, 0.3)
+#    img = pix.random_contrast(rng[1], img, lower=0.2, upper=3)
 #    img = pix.random_saturation(rng[2], img, lower=0, upper=3)
     img = pix.random_flip_left_right(rng[2], img)
     img = pix.random_flip_up_down(rng[3], img)
