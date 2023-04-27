@@ -130,7 +130,7 @@ def train_mnist(rng_key=random.PRNGKey(42)):
         subkey, rng_key = random.split(rng_key)
         info.append(dict(loss=np.mean(losses), epoch=epoch, step=step, train_acc=np.mean(acc), val_acc=val_accuracy(params, subkey)))
 
-    info = utils.dict_concatenate(info)
+    info = utils.tree_list(info)
     return info, model, params
 
 

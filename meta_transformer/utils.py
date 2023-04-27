@@ -106,37 +106,16 @@ def chunk_params(params: dict, chunk_size: int) -> dict:
     }
 
 
-def dict_concatenate(dict_list, np_array=False): # TODO: make prettier
-    """
-    Arguments:
-    * dict_list: a list of dictionaries with the same keys. All values must
-    be numeric or a nested dict.
-    Returns:
-    * a dictionary with the same keys as the input dictionaries. The values
-    are lists consisting of the concatenation of the values in the input dictionaries.
-    """
-    for d in dict_list:
-        if not isinstance(d, collections.Mapping):
-            raise TypeError("Input has to be a list consisting of dictionaries.")
-        elif not all([dict_list[i].keys() == dict_list[i+1].keys() for i in range(len(dict_list)-1)]):
-            raise ValueError("The keys of all input dictionaries need to match.")
-
-    keys = dict_list[0].keys()
-    out = {key: [d[key] for d in dict_list] for key in keys}
-
-    if np_array:
-        for k, v in out.items():
-            try:
-                out[k] = jnp.asarray(v)
-            except TypeError:
-                out[k] = dict_concatenate(v)
-    else:
-        for k, v in out.items():
-            if isinstance(v[0], collections.Mapping):
-                out[k] = dict_concatenate(v)
-    return out
-
-
 def count_params(params: dict) -> int:
-    """Count the number of parameters in a dictionary of parameters."""
+    """Count the number of parameters in a pytree of parameters."""
     return sum([x.size for x in jax.tree_util.tree_leaves(params)])
+
+
+def tree_list(trees):
+    """Maps a list of trees to a tree of lists."""
+    return jax.tree_map(lambda *x: list(x), *trees)
+
+
+def tree_stack(trees):
+    """Stacks a list of trees into a single tree with an extra dimension."""
+    return jax.tree_map(lambda *x: jnp.stack(x), *trees)
