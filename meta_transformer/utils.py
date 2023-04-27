@@ -16,6 +16,8 @@ def load_data(dataset_name: str = "mnist"):
     """Load mnist, cifar10 or cifar100 dataset."""
     dataset = datasets.load_dataset(dataset_name)
     dataset = dataset.with_format("jax")
+    if dataset_name == "mnist":
+        dataset = dataset.rename_column("image", "img")
     train, test = dataset["train"], dataset["test"]
     train_images, train_labels = train["img"], train["label"]
     test_images, test_labels = test["img"], test["label"]
