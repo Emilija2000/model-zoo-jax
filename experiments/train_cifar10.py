@@ -1,23 +1,21 @@
-from meta_transformer import transformer
 import jax
-from jax import random, grad, jit, value_and_grad
+from jax import random, jit, value_and_grad, nn
 import jax.numpy as jnp
-import haiku as hk
-from jax import nn
-from meta_transformer import utils
-import optax
 import numpy as np
-import matplotlib.pyplot as plt
+import haiku as hk
+import optax
+import chex
 import functools
 from typing import Mapping, Any, Tuple, List, Iterator, Optional
-import chex
-import matplotlib
+from meta_transformer import utils, vit, transformer
+import matplotlib.pyplot as plt
 import wandb
 
 AUGMENT = True
 USE_WANDB = True
 DATA_MEAN = 0.473
 DATA_STD = 0.251
+PATCH_SIZE = 8
 
 
 # Model
@@ -29,7 +27,7 @@ def forward(image_batch, is_training=True):
         augment=AUGMENT if is_training else False,
     )
     image_batch = (image_batch - DATA_MEAN) / DATA_STD
-    t = transformer.Classifier(
+    t = vit.VisionTransformer(
         transformer=transformer.Transformer(
             # I think we want model_size = key_size * num_heads
             num_heads=8,
@@ -39,6 +37,7 @@ def forward(image_batch, is_training=True):
         ),
         model_size=256,
         num_classes=10,
+        patch_size=PATCH_SIZE,
     )
     return t(image_batch, is_training=is_training)
 
@@ -132,6 +131,7 @@ class Logger:
     # TODO: keep state for metrics instead of just pushing to wandb?
     # TODO: log mean of train_acc and train_loss
     log_interval: int = 50
+    disable_wandb: bool = False
 
     def log(self,
             state: TrainState,
@@ -143,7 +143,8 @@ class Logger:
         metrics = {k: float(v) for k, v in metrics.items() if k != "step"}
         if state.step % self.log_interval == 0 or val_metrics is not None:
             print(", ".join([f"{k}: {round(v, 3)}" for k, v in metrics.items()]))
-            wandb.log(metrics, step=state.step)
+            if not self.disable_wandb:
+                wandb.log(metrics, step=state.step)
 
 
 def shuffle_data(rng: jnp.ndarray, images: jnp.ndarray, labels: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -172,6 +173,7 @@ if __name__ == "__main__":
     wandb.init(
         mode="online" if USE_WANDB else "disabled",
         project="meta-models",
+        tags=[],
         config={
             "data_augmentation": AUGMENT,
             "dataset": "CIFAR-10",
@@ -179,7 +181,10 @@ if __name__ == "__main__":
             "weight_decay": WEIGHT_DECAY,
             "batchsize": BATCH_SIZE,
             "num_epochs": NUM_EPOCHS,
-        })  # TODO properly set and log config
+            "patch_size": PATCH_SIZE,
+        },
+        notes="Testing stride = patch_size // 2 and SAME padding instead of VALID for patch embeddings. Breaking the ViT assumptions. Doubled patch size to have same sequence length as for prev runs."
+        )  # TODO properly set and log config
 
     steps_per_epoch = 50000 // BATCH_SIZE
 
