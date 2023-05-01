@@ -15,7 +15,7 @@ AUGMENT = True
 USE_WANDB = True
 DATA_MEAN = 0.473
 DATA_STD = 0.251
-PATCH_SIZE = 8
+PATCH_SIZE = 4
 
 
 # Model
@@ -129,7 +129,9 @@ class Updater: # Could also make this a function of loss_fn, model.apply, etc if
 @chex.dataclass
 class Logger:
     # TODO: keep state for metrics instead of just pushing to wandb?
-    # TODO: log mean of train_acc and train_loss
+    # TODO: keep state in between log_intervals; compute mean of 
+    # train_acc and train_loss, and then log that at the end 
+    # of the interval. Also keep track of val_acc and val_loss.
     log_interval: int = 50
     disable_wandb: bool = False
 

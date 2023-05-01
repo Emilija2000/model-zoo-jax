@@ -19,8 +19,8 @@ class Patches(hk.Module):
     conv = hk.Conv2D(
         output_channels=self.embed_dim,
         kernel_shape=self.patch_size,
-        stride=self.patch_size // 2,
-        padding='SAME'
+        stride=self.patch_size,
+        padding='VALID'
     )
     patches = conv(image_batch)  # [B, H', W', D]
     b, h, w, d = patches.shape
