@@ -37,13 +37,13 @@ class NetEmbedding(hk.Module):
 
     def __call__(
             self,
-            params: dict,
+            input_params: dict,
     ) -> jax.Array:
         conv_embed = WeightEmbedding(chunk_size=256, embed_dim=self.embed_dim)
         linear_embed = WeightEmbedding(chunk_size=1024, embed_dim=self.embed_dim)
         bias_embed = WeightEmbedding(chunk_size=16, embed_dim=self.embed_dim)
 
-        params_dict = {f"{k}/{subk}": subv for k, v in params.items() 
+        params_dict = {f"{k}/{subk}": subv for k, v in input_params.items() 
                     for subk, subv in v.items()}
 
         embeddings = []
@@ -87,4 +87,5 @@ class MetaModelClassifier(hk.Module):
         is_training=is_training,
     )  # [B, T, D]
 
-    return hk.Linear(self.num_classes)(embeddings)  # [B, T, V]
+    first_out = embeddings[:, 0, :]  # [B, V]
+    return hk.Linear(self.num_classes, name="linear_output")(first_out)  # [B, V]
