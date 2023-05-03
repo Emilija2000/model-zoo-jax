@@ -69,5 +69,6 @@ class VisionTransformer(hk.Module):
         input_embeddings,
         is_training=is_training,
     )  # [B, T, D]
-
-    return hk.Linear(self.num_classes)(embeddings)  # [B, T, V]
+    
+    first_out = embeddings[:, 0, :]  # [B, V]
+    return hk.Linear(self.num_classes, name="linear_output")(first_out)  # [B, V]

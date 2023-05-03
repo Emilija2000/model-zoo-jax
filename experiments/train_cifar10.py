@@ -16,6 +16,7 @@ USE_WANDB = True
 DATA_MEAN = 0.473
 DATA_STD = 0.251
 PATCH_SIZE = 4
+DROPOUT_RATE = 0.1
 
 
 # Model
@@ -27,19 +28,19 @@ def forward(image_batch, is_training=True):
         augment=AUGMENT if is_training else False,
     )
     image_batch = (image_batch - DATA_MEAN) / DATA_STD
-    t = vit.VisionTransformer(
+    net = vit.VisionTransformer(
         transformer=transformer.Transformer(
             # I think we want model_size = key_size * num_heads
             num_heads=8,
             num_layers=6,
             key_size=32,
-            dropout_rate=0.1,
+            dropout_rate=DROPOUT_RATE,
         ),
         model_size=256,
         num_classes=10,
         patch_size=PATCH_SIZE,
     )
-    return t(image_batch, is_training=is_training)
+    return net(image_batch, is_training=is_training)
 
 
 model = hk.transform(forward)
@@ -61,7 +62,7 @@ def loss_from_logits(logits, targets):
 def loss_fn(params, rng, data, is_training=True):
     """data is a dict with keys 'img' and 'label'."""
     images, targets = data["img"], data["label"]
-    logits = model.apply(params, rng, images, is_training)[:, 0, :]  # [B, C]
+    logits = model.apply(params, rng, images, is_training)  # [B, classes]
     loss = loss_from_logits(logits, targets)
     acc = acc_from_logits(logits, targets)
     return loss, acc
@@ -174,7 +175,7 @@ if __name__ == "__main__":
 
     wandb.init(
         mode="online" if USE_WANDB else "disabled",
-        project="meta-models",
+        project="vision-transformer",
         tags=[],
         config={
             "data_augmentation": AUGMENT,
@@ -184,11 +185,16 @@ if __name__ == "__main__":
             "batchsize": BATCH_SIZE,
             "num_epochs": NUM_EPOCHS,
             "patch_size": PATCH_SIZE,
+            "dropout_rate": DROPOUT_RATE,
         },
         notes="Testing stride = patch_size // 2 and SAME padding instead of VALID for patch embeddings. Breaking the ViT assumptions. Doubled patch size to have same sequence length as for prev runs."
         )  # TODO properly set and log config
 
     steps_per_epoch = 50000 // BATCH_SIZE
+    print()
+    print("Steps per epoch:", steps_per_epoch)
+    print("Total number of steps:", steps_per_epoch * NUM_EPOCHS)
+    print()
 
     # Data
     train_images, train_labels, test_images, test_labels = utils.load_data("cifar10")
@@ -205,9 +211,6 @@ if __name__ == "__main__":
         })
 
     print("Number of parameters:", utils.count_params(state.params) / 1e6, "Million")
-    fig, axs = plt.subplots(1, 2, figsize=(9, 4))
-    fig.tight_layout()
-    lines = None
 
     # Training loop
     for epoch in range(NUM_EPOCHS):
