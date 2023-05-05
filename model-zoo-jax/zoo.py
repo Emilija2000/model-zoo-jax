@@ -71,7 +71,7 @@ if __name__=='__main__':
         if zoo_config.optimizer == 'adamW':
             optimizer = optax.adamw(learning_rate=zoo_config.lr, weight_decay=zoo_config.weight_decay)
         elif zoo_config.optimizer == 'sgd':
-            optimizer = optimizer = optax.chain(optax.add_decayed_weights(zoo_config.weight_decay), optax.sgd(zoo_config.lr) 
+            optimizer = optimizer = optax.chain(optax.add_decayed_weights(zoo_config.weight_decay), optax.sgd(zoo_config.lr,momentum=0.99) 
         )
         else:
             raise ValueError('Unsupported optimizer')
@@ -92,9 +92,14 @@ if __name__=='__main__':
 
         #training loop
         for epoch in range(zoo_config.num_epochs):
+            train_all_acc = []
+            train_all_loss = []
             for batch in dataloaders['train']:
                 state, train_metrics = updater.train_step(state, batch)
                 logger.log(state, train_metrics)
+                train_all_acc.append(train_metrics['train/acc'].item())
+                train_all_loss.append(train_metrics['train/loss'].item())
+            train_metrics = {'train/acc':np.mean(train_all_acc), 'train/loss':np.mean(train_all_loss)}
                 
             test_acc = []
             test_loss = []

@@ -139,8 +139,8 @@ class CNN(hk.Module):
             
         # flatten
         if self.fixed_emb_size is not None:
-            x = AdaptiveAvgPool2D(self.fixed_emb_size)(x)
-            print(x.shape)
+            #x = AdaptiveAvgPool2D(self.fixed_emb_size)(x)
+            x = hk.MaxPool(window_shape=(2,2,1),strides=1,padding="VALID")(x) #temporary
         
         x = jnp.ravel(x)
             
@@ -269,8 +269,11 @@ if __name__ == "__main__":
     def custom_target_transform(x):
         return np.array(x,dtype = jnp.int32)
     
-    #model = hk.transform(forward_cnn_small)
-    model = hk.transform_with_state(forward_resnet18)
+    model = hk.transform(forward_cnn_large)
+    #model = hk.transform(forward_lenet5)
+    #model = hk.transform_with_state(forward_resnet18)
+    #model = hk.transform(forward_alexnet)
+    
     
     train_dataset = CIFAR10(root='datasets/cifar10/train_cifar10', train=True, download=True, transform=custom_transform, target_transform=custom_target_transform)
     dummy_x = train_dataset[0][0]
@@ -278,11 +281,11 @@ if __name__ == "__main__":
     rng_key = jax.random.PRNGKey(42)
     key,subkey = jax.random.split(rng_key)
 
-    #params = model.init(rng=subkey, x=dummy_x, is_training=True)
-    params,state = model.init(rng=subkey, x=dummy_x, is_training=True)
+    params = model.init(rng=subkey, x=dummy_x, is_training=True)
+    #params,state = model.init(rng=subkey, x=dummy_x, is_training=True)
 
     #test 
     print("param count:", sum(x.size for x in jax.tree_util.tree_leaves(params)))
-    #print("param tree:", jax.tree_map(lambda x: x.shape, params))
-    #print("model out:",model.apply(params,rng_key,train_dataset[0][0]))
-    print("model out:",model.apply(params,state,rng_key,train_dataset[0][0])[0])
+    print("param tree:", jax.tree_map(lambda x: x.shape, params))
+    print("model out:",model.apply(params,rng_key,train_dataset[0][0]))
+    #print("model out:",model.apply(params,state,rng_key,train_dataset[0][0])[0])

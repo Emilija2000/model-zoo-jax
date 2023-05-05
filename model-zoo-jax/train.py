@@ -83,19 +83,24 @@ if __name__ == '__main__':
     else:
         optimizer = optax.chain(
             optax.add_decayed_weights(config.weight_decay), 
-            optax.sgd(config.lr) 
+            optax.sgd(config.lr,momentum=0.99)
         )
     updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
 
     state = updater.init_params(rng=config.seed,x=datasets['train'][0][0])
     
-    logger = Logger(name="trial", config=config,log_interval=500)
+    logger = Logger(name="trial", config=config,log_interval=500,log_wandb=True)
     logger.init()
 
     for epoch in range(config.num_epochs):
+        train_all_acc = []
+        train_all_loss = []
         for batch in dataloaders['train']:
             state, train_metrics = updater.train_step(state, batch)
             logger.log(state, train_metrics)
+            train_all_acc.append(train_metrics['train/acc'].item())
+            train_all_loss.append(train_metrics['train/loss'].item())
+        train_metrics = {'train/acc':np.mean(train_all_acc), 'train/loss':np.mean(train_all_loss)}
             
         val_acc = []
         val_loss = []
