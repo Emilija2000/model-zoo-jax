@@ -44,6 +44,12 @@ class AdaptiveAvgPool2D(hk.Module):
                 height, width, channels = input_shape
         return height,width
     
+    #def pool_2(p, window_dimensions,window_strides,padding):
+    #    return jax.lax.reduce_window(p, onp.zeros((), p.dtype), jax.lax.add,
+    #                                window_dimensions=window_shape,
+    #                                window_strides=window_shape,
+    #                                padding=padding)
+    
     def get_window_size_and_padding(self,x):
         input_shape = x.shape
         input_height, input_width = self.get_hw(x)
@@ -77,12 +83,12 @@ class AdaptiveAvgPool2D(hk.Module):
             return x
         
         # average pooling
-        y = jax.lax.reduce_window(x, jnp.float32(0), 
+        y = jax.lax.reduce_window(x, jnp.zeros((), x.dtype), 
                                   jax.lax.add, 
                                   window_dimensions=window_shape,
                                   window_strides=window_shape,
                                   padding=padding)
-        y = y / jnp.prod(np.array(window_shape))
+        y = y / jnp.prod(jnp.array(window_shape))
         
         return y
     

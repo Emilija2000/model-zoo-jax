@@ -41,9 +41,10 @@ class Logger:
     save_interval: Optional[int] = 20
     
     def init(self):
-        wandb.init(config=self.config, project=self.name)
+        if self.log_wandb:
+            wandb.init(config=self.config, project=self.name)
         self.save_config()
-        self.savestep=1
+        self.savestep=0
 
     def wandb_log(self,
             state: TrainState,
@@ -57,21 +58,25 @@ class Logger:
         print(", ".join([f"{k}: {round(v, 3)}" for k, v in metrics.items()]))
             
     def save_checkpoint(self, state:TrainState, train_metrics:dict, val_metrics:dict=None):
-        checkpoint_name = os.path.join(self.checkpoint_dir,self.name+"_"+str(state.step))
+        checkpoint_name = os.path.join(self.checkpoint_dir,str(state.step))
         if not os.path.exists(checkpoint_name):
             os.makedirs(checkpoint_name)
         model_save(checkpoint_name, state.params)
         
         metrics = train_metrics
         metrics.update(val_metrics)
-        with open(os.path.join(checkpoint_name, "metrics.json"), "wb") as f:
-            json.dump(dict(metrics), f)
+        
+        metrics = {key: value.item() for key,value in metrics.items()}
+        with open(os.path.join(checkpoint_name, "metrics.json"), "w") as f:
+            json.dump(dict(metrics), f, indent=4)
             
     def save_config(self):
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
-        with open(os.path.join(self.checkpoint_dir, "config.json"), "wb") as f:
-            json.dump(dict(self.config), f)
+        with open(os.path.join(self.checkpoint_dir, "config.json"), "w") as f:
+            config = dict(self.config)
+            config['seed'] = (str(np.array(self.config['seed'][0])), str(np.array(self.config['seed'][1])))
+            json.dump(dict(config), f, indent=4)
         
     def log(self, 
             state: TrainState,
@@ -79,6 +84,10 @@ class Logger:
             val_metrics: dict = None):
         if self.log_wandb and (state.step % self.log_interval == 0 or val_metrics is not None):
             self.wandb_log(state,train_metrics,val_metrics)
-        if val_metrics is not None and (self.savestep % self.save_interval == 0):
-            self.save_checkpoint(state,train_metrics,val_metrics)
+        if val_metrics is not None: 
+            self.savestep = self.savestep+1
+            if (self.savestep % self.save_interval == 0):
+                self.save_checkpoint(state,train_metrics,val_metrics)
+            
+        
         

@@ -33,7 +33,7 @@ def sample_parameters(rng_key, dataset_name,
                       opt=None,
                       num_epochs=None, 
                       augment=False):
-    new_key, seed, key_class_dropped, key_act, key_init, key_batch,key_dropout, key_weight_decay, key_lr,key_opt,key_model = jax.random.split(rng_key, num=9)
+    new_key, seed, key_class_dropped, key_act, key_init, key_batch,key_dropout, key_weight_decay, key_lr,key_opt,key_model = jax.random.split(rng_key, num=11)
     
     # dataset specific one-class-omission
     if dataset_name == "MNIST":
@@ -61,6 +61,8 @@ def sample_parameters(rng_key, dataset_name,
     if init=="random":
         inits = [None, "U", "N", "TN"]
         init = inits[jax.random.randint(key_init, (), 0, len(inits))]
+    elif init=="None":
+        init=None
     
     # batch
     if batch_size==None:
@@ -70,16 +72,19 @@ def sample_parameters(rng_key, dataset_name,
     # dropout
     if dropout==None:
         dropout = jax.random.uniform(key_dropout, (), minval=0.0, maxval=0.5)
+        dropout = dropout.item()
     
     # weight decay
     if weight_decay==None:
         log_weight_decay = jax.random.uniform(key_weight_decay, (), minval=-4.0, maxval=-2.0)
         weight_decay = jnp.power(10.0, log_weight_decay)
+        weight_decay = weight_decay.item()
     
     # learning rate
     if lr==None:
         log_lr = jax.random.uniform(key_lr, (), minval=-4.0, maxval=-3.0)
         lr = jnp.power(10.0, log_lr)
+        lr = lr.item()
     
     # optionally fixed parameters
     # optimizer
@@ -107,7 +112,7 @@ def sample_parameters(rng_key, dataset_name,
                       batch_size=batch_size,
                       num_epochs=num_epochs,
                       optimizer=opt,
-                      dropout=dropout.item(),
-                      weight_decay=weight_decay.item(),
-                      lr=lr.item())
+                      dropout=dropout,
+                      weight_decay=weight_decay,
+                      lr=lr)
     
