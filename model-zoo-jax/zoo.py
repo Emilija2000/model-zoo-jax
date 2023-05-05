@@ -32,7 +32,7 @@ if __name__=='__main__':
     parser.add_argument("--dropout",type=float, default=None)
     parser.add_argument("--weight_decay",type=float,default=None)
     parser.add_argument("--lr",type=float,default=None)
-    parser.add_argument("--optimizer",type="str",default=None)
+    parser.add_argument("--optimizer",type=str,default=None)
     parser.add_argument("--checkpoint_save_interval",type=int,default=20)
     args = parser.parse_args()
     
@@ -81,9 +81,9 @@ if __name__=='__main__':
         state = updater.init_params(rng=zoo_config.seed,x=datasets['train'][0][0])
     
         # logger
-        checkpoints_subdir = str(args.seed)+str(z)
-        checkpoint_dir=os.path.join("checkpoints",ZOO_NAME,checkpoints_subdir)
-        logger = Logger(name=ZOO_NAME+"_"+str(z), 
+        checkpoints_subdir = "seed_"+str(args.seed)+"_iter_"+str(z)
+        checkpoint_dir=os.path.join("checkpoints",args.zoo_name,checkpoints_subdir)
+        logger = Logger(name=args.zoo_name+"_"+str(z), 
                         checkpoint_dir=checkpoint_dir, 
                         config=zoo_config,log_interval=500,
                         log_wandb=args.log_wandb,
