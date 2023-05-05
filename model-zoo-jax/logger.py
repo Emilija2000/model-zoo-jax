@@ -3,6 +3,7 @@ import jax
 import numpy as np
 import os
 import pickle
+import json
 from typing import Optional
 
 from utils import TrainState
@@ -37,10 +38,12 @@ class Logger:
     log_interval: Optional[int] = 50
     checkpoint_dir: Optional[str] = "checkpoints"
     log_wandb:Optional[bool] = True
+    save_interval: Optional[int] = 20
     
     def init(self):
         wandb.init(config=self.config, project=self.name)
         self.save_config()
+        self.savestep=1
 
     def wandb_log(self,
             state: TrainState,
@@ -61,14 +64,14 @@ class Logger:
         
         metrics = train_metrics
         metrics.update(val_metrics)
-        with open(os.path.join(checkpoint_name, "metrics.pkl"), "wb") as f:
-            pickle.dump(dict(metrics), f)
+        with open(os.path.join(checkpoint_name, "metrics.json"), "wb") as f:
+            json.dump(dict(metrics), f)
             
     def save_config(self):
         if not os.path.exists(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
-        with open(os.path.join(self.checkpoint_dir, "config.pkl"), "wb") as f:
-            pickle.dump(dict(self.config), f)
+        with open(os.path.join(self.checkpoint_dir, "config.json"), "wb") as f:
+            json.dump(dict(self.config), f)
         
     def log(self, 
             state: TrainState,
@@ -76,6 +79,6 @@ class Logger:
             val_metrics: dict = None):
         if self.log_wandb and (state.step % self.log_interval == 0 or val_metrics is not None):
             self.wandb_log(state,train_metrics,val_metrics)
-        if val_metrics is not None:
+        if val_metrics is not None and (self.savestep % self.save_interval == 0):
             self.save_checkpoint(state,train_metrics,val_metrics)
         

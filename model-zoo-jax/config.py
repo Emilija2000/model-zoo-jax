@@ -22,7 +22,17 @@ class Parameters:
     weight_decay: Optional[jnp.float32] = 1e-4
     lr: Optional[jnp.float32] = 3e-4
     
-def sample_parameters(rng_key, dataset_name, model_name=None,opt=None,num_epochs=None, augment=False):
+def sample_parameters(rng_key, dataset_name, 
+                      model_name=None, 
+                      activation=None, 
+                      init="random", 
+                      batch_size=None,
+                      dropout=None,
+                      weight_decay=None,
+                      lr=None,
+                      opt=None,
+                      num_epochs=None, 
+                      augment=False):
     new_key, seed, key_class_dropped, key_act, key_init, key_batch,key_dropout, key_weight_decay, key_lr,key_opt,key_model = jax.random.split(rng_key, num=9)
     
     # dataset specific one-class-omission
@@ -43,27 +53,33 @@ def sample_parameters(rng_key, dataset_name, model_name=None,opt=None,num_epochs
     class_dropped = jax.random.randint(key_class_dropped, (), 0, num_classes)
     
     # activation
-    activations = ["relu", "leakyrelu", "tanh", "sigmoid", "silu", "gelu"]
-    activation = activations[jax.random.randint(key_act, (), 0, len(activations))]
+    if activation == None:
+        activations = ["relu", "leakyrelu", "tanh", "sigmoid", "silu", "gelu"]
+        activation = activations[jax.random.randint(key_act, (), 0, len(activations))]
     
     # init
-    inits = [None, "U", "N", "TN"]
-    init = inits[jax.random.randint(key_init, (), 0, len(inits))]
+    if init=="random":
+        inits = [None, "U", "N", "TN"]
+        init = inits[jax.random.randint(key_init, (), 0, len(inits))]
     
     # batch
-    batch_sizes = [32, 64, 128]
-    batch_size = batch_sizes[jax.random.randint(key_batch, (), 0, len(batch_sizes))]
+    if batch_size==None:
+        batch_sizes = [32, 64, 128]
+        batch_size = batch_sizes[jax.random.randint(key_batch, (), 0, len(batch_sizes))]
     
     # dropout
-    dropout = jax.random.uniform(key_dropout, (), minval=0.0, maxval=0.5)
+    if dropout==None:
+        dropout = jax.random.uniform(key_dropout, (), minval=0.0, maxval=0.5)
     
     # weight decay
-    log_weight_decay = jax.random.uniform(key_weight_decay, (), minval=-4.0, maxval=-2.0)
-    weight_decay = jnp.power(10.0, log_weight_decay)
+    if weight_decay==None:
+        log_weight_decay = jax.random.uniform(key_weight_decay, (), minval=-4.0, maxval=-2.0)
+        weight_decay = jnp.power(10.0, log_weight_decay)
     
     # learning rate
-    log_lr = jax.random.uniform(key_lr, (), minval=-4.0, maxval=-3.0)
-    lr = jnp.power(10.0, log_lr)
+    if lr==None:
+        log_lr = jax.random.uniform(key_lr, (), minval=-4.0, maxval=-3.0)
+        lr = jnp.power(10.0, log_lr)
     
     # optionally fixed parameters
     # optimizer
