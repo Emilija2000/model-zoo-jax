@@ -23,7 +23,7 @@ class Parameters:
     lr: Optional[jnp.float32] = 3e-4
     
 def sample_parameters(rng_key, dataset_name, model_name=None,opt=None,num_epochs=None, augment=False):
-    new_key, seed, key_class_dropped, key_act, key_init, key_batch,key_dropout, key_weight_decay, key_lr = jax.random.split(rng_key, num=9)
+    new_key, seed, key_class_dropped, key_act, key_init, key_batch,key_dropout, key_weight_decay, key_lr,key_opt,key_model = jax.random.split(rng_key, num=9)
     
     # dataset specific one-class-omission
     if dataset_name == "MNIST":
@@ -64,6 +64,19 @@ def sample_parameters(rng_key, dataset_name, model_name=None,opt=None,num_epochs
     # learning rate
     log_lr = jax.random.uniform(key_lr, (), minval=-4.0, maxval=-3.0)
     lr = jnp.power(10.0, log_lr)
+    
+    # optionally fixed parameters
+    # optimizer
+    if opt == None:
+        optimizers = ["adamW","sgd"]
+        opt = optimizers[jax.random.randint(key_opt, (), 0, len(optimizers))]
+        
+    if num_epochs == None:
+        num_epochs = 50
+        
+    if model_name==None:
+        models = ["smallCNN", "largeCNN", "lenet5","alexnet"]
+        model_name = models[jax.random.randint(key_model,(),0,len(models))]
     
     return new_key,Parameters(seed=seed, 
                       dataset=dataset_name, 

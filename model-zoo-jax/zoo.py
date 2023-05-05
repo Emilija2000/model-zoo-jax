@@ -11,32 +11,33 @@ from logger import Logger
 from models.models import get_model
 from train import Updater
 
-NUM_MODELS=1 #model zoo dataset size
-SEED=42 #global seed
-
-# fixed zoo parameters
-NUM_EPOCHS = 50
-OPTIMIZER = "adamW"
-MODEL = "lenet5"
-DATASET = "CIFAR10"
-ZOO_NAME = "cifar10zoo"
-LOG_WANDB = False
-AUGMENT = False
+import argparse
 
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT_PATH)
 
 if __name__=='__main__':
+    parser = argparse.ArgumentParser("Get random seed")
+    parser.add_argument("--seed",type=int,default=42)
+    parser.add_argument("--num_models",type=int,default=1)
+    parser.add_argument("--num_epochs",type=int,default=50)
+    parser.add_argument("--model",type=str,default="lenet5")
+    parser.add_argument("--zoo_name",type=str, default="cifar10zoo")
+    parser.add_argument("--dataset",type=str,default="CIFAR10")
+    parser.add_argument("--log_wandb",type=bool,default=False)
+    parser.add_argument("--augment",type=bool,default=False)
+    parser.add_argument("--optimizer",type="str",default=None)
+    args = parser.parse_args()
     
-    key = jax.random.PRNGKey(SEED)
+    key = jax.random.PRNGKey(args.seed)
     
     # load dataset
-    datasets_full = load_dataset(DATASET)
+    datasets_full = load_dataset()
     
-    for z in range(NUM_MODELS):
+    for z in range(args.num_models):
         # config
         key, subkey = jax.random.split(key)
-        subkey, zoo_config = sample_parameters(subkey,DATASET,MODEL,OPTIMIZER,NUM_EPOCHS,AUGMENT)
+        subkey, zoo_config = sample_parameters(subkey,args.dataset,args.model,args.optimizer,args.num_epochs,args.augment)
         
         # drop class
         datasets = drop_class_from_datasets(datasets_full, zoo_config.class_dropped)
@@ -56,15 +57,16 @@ if __name__=='__main__':
             optimizer = optimizer = optax.chain(optax.add_decayed_weights(zoo_config.weight_decay), optax.sgd(zoo_config.lr) 
         )
         else:
-            raise ValueError('Unsupported optimiser')
+            raise ValueError('Unsupported optimizer')
     
         # updater
         updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
         state = updater.init_params(rng=zoo_config.seed,x=datasets['train'][0][0])
     
         # logger
-        checkpoint_dir=os.path.join("checkpoints",ZOO_NAME,str(z))
-        logger = Logger(name=ZOO_NAME+"_"+str(z), checkpoint_dir=checkpoint_dir, config=zoo_config,log_interval=500,log_wandb=LOG_WANDB)
+        checkpoints_subdir = str(args.seed)+str(z)
+        checkpoint_dir=os.path.join("checkpoints",ZOO_NAME,checkpoints_subdir)
+        logger = Logger(name=ZOO_NAME+"_"+str(z), checkpoint_dir=checkpoint_dir, config=zoo_config,log_interval=500,log_wandb=args.log_wandb)
         logger.init()
 
         #training loop
