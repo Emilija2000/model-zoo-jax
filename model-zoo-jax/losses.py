@@ -18,23 +18,29 @@ class Evaluator:
         pass
     
     @functools.partial(jit, static_argnums=(0))
-    def train_metrics(self, params, rng, data):
+    def train_metrics(self, params, rng, data,state=None):
         images = data[0]
         targets = data[1]
-        logits = self.model_apply(params, rng, images, True) 
+        if state is None:
+            logits = self.model_apply(params, rng, images, True) 
+        else:
+            logits,state=self.model_apply(params,state,rng,images,True)
         loss = self.loss_from_logits(logits, targets)
         acc = self.acc_from_logits(logits, targets)
-        return loss, acc
+        
+        return loss, (acc, state)
     
     @functools.partial(jit, static_argnums=(0))
-    def val_metrics(self, params, rng, data):
+    def val_metrics(self, params, rng, data,state=None):
         images = data[0]
         targets = data[1]
-        logits = self.model_apply(params, rng, images, False)
+        if state is None:
+            logits = self.model_apply(params, rng, images, False)
+        else:
+            logits,state = self.model_apply(params, state, rng, images, False)
         loss = self.loss_from_logits(logits, targets)
         acc = self.acc_from_logits(logits, targets)
-        return loss, acc
-    
+        return loss, (acc, state)
     
 class CrossEntropyLoss(Evaluator):
     def acc_from_logits(self, logits, targets):

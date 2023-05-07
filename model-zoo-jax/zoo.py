@@ -61,8 +61,13 @@ if __name__=='__main__':
         dataloaders = get_dataloaders(datasets, zoo_config.batch_size)
         
         # model
-        model = get_model(zoo_config)
-        batch_apply = vmap(model.apply, in_axes=(None,None,0,None),axis_name='batch')
+        model,is_batch = get_model(zoo_config)
+        if not(is_batch):
+            batch_apply = vmap(model.apply, in_axes=(None,None,0,None),axis_name='batch')
+            init_x = datasets['train'][0][0]
+        else:
+            batch_apply = model.apply
+            init_x = next(iter(dataloaders['train']))[0]
     
         # loss
         evaluator = CrossEntropyLoss(batch_apply, zoo_config.num_classes)
@@ -78,7 +83,7 @@ if __name__=='__main__':
     
         # updater
         updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
-        state = updater.init_params(rng=zoo_config.seed,x=datasets['train'][0][0])
+        state = updater.init_params(rng=zoo_config.seed,x=init_x)
     
         # logger
         checkpoints_subdir = "seed_"+str(args.seed)+"_iter_"+str(z)
