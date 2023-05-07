@@ -81,12 +81,13 @@ class Logger:
     def log(self, 
             state: TrainState,
             train_metrics: dict,
-            val_metrics: dict = None):
+            val_metrics: dict = None,
+            last=False):
         if self.log_wandb and (state.step % self.log_interval == 0 or val_metrics is not None):
             self.wandb_log(state,train_metrics,val_metrics)
         if val_metrics is not None: 
             self.savestep = self.savestep+1
-            if (self.savestep % self.save_interval == 0):
+            if (self.savestep % self.save_interval == 0) or last:
                 self.save_checkpoint(state,train_metrics,val_metrics)
             
         

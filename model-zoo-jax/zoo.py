@@ -108,7 +108,7 @@ if __name__=='__main__':
                 test_acc.append(test_metrics['val/acc'].item())
                 test_loss.append(test_metrics['val/loss'].item())
             test_metrics = {'test/acc':np.mean(test_acc), 'test/loss':np.mean(test_loss)}
-            logger.log(state, train_metrics, test_metrics)
+            logger.log(state, train_metrics, test_metrics,last=(epoch==zoo_config.num_epochs-1))
             
         print("Trained model no. {}: class missing: {}, final train_acc: {}, final test_acc: {}"
               .format(z,zoo_config.class_dropped,train_metrics['train/acc'],test_metrics['test/acc']))
