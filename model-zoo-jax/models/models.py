@@ -4,6 +4,7 @@ from haiku.initializers import *
 from meta_transformer.utils import process_datapoint
 
 from models.cnn import *
+from models.resnet import *
 
 def get_initializer(name):
     if name is None:
@@ -18,11 +19,12 @@ def get_initializer(name):
         raise ValueError("unknown initialization")
     
 def get_model(config):
+    "second output is signal if model.apply is already batched"
     fcn = lambda x,is_training: forward_with_augment(x, is_training, config)
     if config.model_name in ["smallCNN","largeCNN","lenet5","alexnet"]:
-        return hk.transform(fcn)
+        return hk.transform(fcn), False
     elif config.model_name in ["resnet18"]:
-        return hk.transform_with_state(fcn)
+        return hk.transform_with_state(fcn), True
     else:
         raise ValueError("Unknown model name")
  

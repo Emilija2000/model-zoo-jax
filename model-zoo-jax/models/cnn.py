@@ -7,6 +7,8 @@ import jax
 import jax.numpy as jnp
 from jax import nn,jit
 
+import functools
+
 @dataclass
 class ConvConfig:
     channels: int
@@ -169,7 +171,7 @@ class CNN(hk.Module):
         if self.nlin == 'gelu':
             return nn.gelu
         
-@jit
+@functools.partial(jit, static_argnums=(1,2))
 def norm(x, mean, std):
     if isinstance(mean, tuple):
         # Vectorized version for multi-channel images
@@ -180,8 +182,9 @@ def norm(x, mean, std):
         # Scalar version for single-channel images
         return (x - mean) / std
     
-@jit
-def augment(x, mean =0.5, std=0.5):
+@functools.partial(jit, static_argnums=(1,2))
+def augment(x, mean, std):
+    #x = x/255.0
     x= norm(x, mean,std)
     return x
         
@@ -247,15 +250,6 @@ def forward_alexnet(x:jnp.array, is_training: bool=True, num_cls=10, dropout=0.5
                          LinConfig(4096, w_init=init, b_init=init)
                          ]
             )(x, is_training=is_training)
-    
-def forward_resnet18(x:jnp.array,is_training: bool=True, num_cls=10, data_mean=0.5, data_std=0.5, init:hk.initializers.Initializer=None):
-    x = augment(x, data_mean, data_std)
-    x = jnp.resize(x, (256,256,x.shape[2]))
-    x = jnp.expand_dims(x,0)
-    net= hk.nets.ResNet18(num_classes=num_cls,
-                        initial_conv_config={'w_init':init,'b_init':init})
-    
-    return net(x, is_training=is_training)
 
 if __name__ == "__main__":
     import jax
@@ -269,23 +263,20 @@ if __name__ == "__main__":
     def custom_target_transform(x):
         return np.array(x,dtype = jnp.int32)
     
-    model = hk.transform(forward_cnn_large)
-    #model = hk.transform(forward_lenet5)
-    #model = hk.transform_with_state(forward_resnet18)
+    #model = hk.transform(forward_cnn_large)
+    model = hk.transform(forward_lenet5)
     #model = hk.transform(forward_alexnet)
     
     
     train_dataset = CIFAR10(root='datasets/cifar10/train_cifar10', train=True, download=True, transform=custom_transform, target_transform=custom_target_transform)
-    dummy_x = train_dataset[0][0]
+    dummy_x = train_dataset[0][0] 
     
     rng_key = jax.random.PRNGKey(42)
     key,subkey = jax.random.split(rng_key)
 
     params = model.init(rng=subkey, x=dummy_x, is_training=True)
-    #params,state = model.init(rng=subkey, x=dummy_x, is_training=True)
 
     #test 
     print("param count:", sum(x.size for x in jax.tree_util.tree_leaves(params)))
     print("param tree:", jax.tree_map(lambda x: x.shape, params))
     print("model out:",model.apply(params,rng_key,train_dataset[0][0]))
-    #print("model out:",model.apply(params,state,rng_key,train_dataset[0][0])[0])

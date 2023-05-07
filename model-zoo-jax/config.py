@@ -10,17 +10,17 @@ class Parameters:
     augment: Optional[bool] = False
     num_classes: Optional[int] = 9
     class_dropped: Optional[int] = 8
-    model_name: Optional[str] = "lenet5" #smallCNN, largeCNN, lenet5 or alexnet, resnet not available yet because it's stateful
-    activation: Optional[str] = "leakyrelu" #relu, leakyrelu,tanh,sigmoid,silu,gelu
-    init: Optional[str] = None #U - uniform, N - normal, TN -truncated normal
-    data_mean: Optional[Union[Tuple[jnp.float32],jnp.float32]] = (0.5,0.5,0.5)
-    data_std: Optional[jnp.float32] = (0.5,0.5,0.5)
+    model_name: Optional[str] = "resnet18" #smallCNN, largeCNN, lenet5, alexnet, resnet18
+    activation: Optional[str] = "relu" #relu, leakyrelu,tanh,sigmoid,silu,gelu
+    init: Optional[str] = None #U - uniform, N - normal, TN -truncated normal, none will use default haiku values
+    data_mean: Optional[Union[Tuple[jnp.float32],jnp.float32]] = (0.49139968, 0.48215827,0.44653124)
+    data_std: Optional[jnp.float32] = (0.24703233, 0.24348505, 0.26158768)
     batch_size: Optional[int] = 32
-    num_epochs: Optional[int] = 50
-    optimizer: Optional[str] = "adamW"
-    dropout: Optional[jnp.float32] = 0.5
-    weight_decay: Optional[jnp.float32] = 1e-4
-    lr: Optional[jnp.float32] = 3e-4
+    num_epochs: Optional[int] = 100
+    optimizer: Optional[str] = "sgd"
+    dropout: Optional[jnp.float32] = 0.0
+    weight_decay: Optional[jnp.float32] = 0.0
+    lr: Optional[jnp.float32] = 0.001
     
 def sample_parameters(rng_key, dataset_name, 
                       model_name=None, 

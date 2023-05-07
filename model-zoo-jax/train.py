@@ -24,19 +24,27 @@ class Updater:
         """Initializes state of the updater."""
         out_rng, k0 = jax.random.split(rng)
         params = self.model_init(rng=k0, x=x, is_training=True)
+        if len(params)==2:
+            params,model_state=params
+        else:
+            model_state=None
         opt_state = self.opt.init(params)
         
         return TrainState(
             step=0,
             rng=out_rng,
             opt_state=opt_state,
-            params=params
+            params=params,
+            model_state=model_state
         )
     
     @functools.partial(jit, static_argnums=0)
     def train_step(self, state: TrainState, data:dict) -> Tuple[TrainState, dict]:
         state.rng, *subkeys = jax.random.split(state.rng, 3)
-        (loss, acc), grads = value_and_grad(self.evaluator.train_metrics, has_aux=True)(state.params, subkeys[1], data)
+        
+        (loss, (acc, new_state)), grads = value_and_grad(self.evaluator.train_metrics, has_aux=True)(state.params, subkeys[1], data,state.model_state)
+    
+        state.model_state=new_state
         updates, state.opt_state = self.opt.update(grads, state.opt_state, state.params)
         state.params = optax.apply_updates(state.params, updates)
         state.step += 1
@@ -50,7 +58,7 @@ class Updater:
     @functools.partial(jit, static_argnums=0)
     def val_step(self, state: TrainState, data: dict) -> Tuple[TrainState, dict]:
         state.rng, subkey = jax.random.split(state.rng)
-        loss, acc = self.evaluator.val_metrics(state.params, subkey, data)
+        loss, (acc,state.model_state) = self.evaluator.val_metrics(state.params, subkey, data,state.model_state)
         metrics = {
                 "val/loss": loss,
                 "val/acc": acc
@@ -65,6 +73,7 @@ if __name__ == '__main__':
     from logger import Logger
     
     import numpy as np
+    from torch.utils.data import Subset
     
     seed = 2
     key = jax.random.PRNGKey(seed)
@@ -72,10 +81,20 @@ if __name__ == '__main__':
     
     datasets = load_drop_class_dataset(config.dataset, config.class_dropped)
     datasets = split_train_dataset(datasets)
+    
+    #for debugging
+    #datasets['train'] = Subset(datasets['train'],np.arange(1000))
+    
     dataloaders = get_dataloaders(datasets, config.batch_size)
     
-    model = get_model(config)
-    batch_apply = vmap(model.apply, in_axes=(None,None,0,None),axis_name='batch')
+    model,is_batch = get_model(config)
+    
+    if not(is_batch):
+        batch_apply = vmap(model.apply, in_axes=(None,None,0,None),axis_name='batch')
+        init_x = datasets['train'][0][0]
+    else:
+        batch_apply = model.apply
+        init_x = next(iter(dataloaders['train']))[0]
     
     evaluator = CrossEntropyLoss(batch_apply, config.num_classes)
     if config.optimizer == 'adamW':
@@ -83,11 +102,11 @@ if __name__ == '__main__':
     else:
         optimizer = optax.chain(
             optax.add_decayed_weights(config.weight_decay), 
-            optax.sgd(config.lr,momentum=0.99)
+            optax.sgd(config.lr,momentum=0.9)
         )
     updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
-
-    state = updater.init_params(rng=config.seed,x=datasets['train'][0][0])
+    
+    state = updater.init_params(rng=config.seed,x=init_x)
     
     logger = Logger(name="trial", config=config,log_interval=500,log_wandb=True)
     logger.init()
