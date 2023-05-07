@@ -73,7 +73,6 @@ if __name__ == '__main__':
     from logger import Logger
     
     import numpy as np
-    from torch.utils.data import Subset
     
     seed = 2
     key = jax.random.PRNGKey(seed)
@@ -81,8 +80,11 @@ if __name__ == '__main__':
     
     datasets = load_drop_class_dataset(config.dataset, config.class_dropped)
     datasets = split_train_dataset(datasets)
+    print("Training dataset: {}".format(len(datasets['train'])))
+    print("Test dataset: {}".format(len(datasets['test'])))
     
     #for debugging
+    #from torch.utils.data import Subset
     #datasets['train'] = Subset(datasets['train'],np.arange(1000))
     
     dataloaders = get_dataloaders(datasets, config.batch_size)
@@ -99,6 +101,25 @@ if __name__ == '__main__':
     evaluator = CrossEntropyLoss(batch_apply, config.num_classes)
     if config.optimizer == 'adamW':
         optimizer = optax.adamw(learning_rate=config.lr, weight_decay=config.weight_decay)
+    elif config.optimizer == 'sgd_scheduler':
+        #total_steps = config.num_epochs*(len(dataloaders['train']))
+        #schedule = optax.warmup_cosine_decay_schedule(
+        #    init_value=0.0,
+        #    peak_value=config.lr,
+        #    warmup_steps=50,
+        #    decay_steps=total_steps,
+        #    end_value=0.0,
+        #    )
+        schedule=optax.exponential_decay(init_value=config.lr,
+                                transition_steps=50*len(dataloaders['train']),
+                                decay_rate=0.2,
+                                staircase=True)
+
+
+        optimizer = optax.chain(
+            optax.add_decayed_weights(config.weight_decay), 
+            optax.sgd(learning_rate=schedule,momentum=0.9,nesterov=True)
+        )
     else:
         optimizer = optax.chain(
             optax.add_decayed_weights(config.weight_decay), 
@@ -107,6 +128,7 @@ if __name__ == '__main__':
     updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
     
     state = updater.init_params(rng=config.seed,x=init_x)
+    print("Param count:", sum(x.size for x in jax.tree_util.tree_leaves(state.params)))
     
     logger = Logger(name="trial", config=config,log_interval=500,log_wandb=True)
     logger.init()
