@@ -6,7 +6,7 @@ import pickle
 import json
 from typing import Optional
 
-from utils import TrainState
+from model_zoo_jax.utils import TrainState
 import wandb
 
 def model_save(ckpt_dir: str, state) -> None:
@@ -35,15 +35,17 @@ def model_restore(ckpt_dir):
 class Logger:
     name: str
     config: dict
-    log_interval: Optional[int] = 50
-    checkpoint_dir: Optional[str] = "checkpoints"
     log_wandb:Optional[bool] = True
+    log_interval: Optional[int] = 50
+    save_checkpoints: Optional[bool] = True
+    checkpoint_dir: Optional[str] = "checkpoints"
     save_interval: Optional[int] = 20
     
-    def init(self):
-        if self.log_wandb:
-            wandb.init(config=self.config, project=self.name)
-        self.save_config()
+    def init(self,is_save_config=True):
+        wandb.init(config=self.config, project=self.name, 
+                   mode="online" if self.log_wandb else "disabled")
+        if is_save_config:
+            self.save_config()
         self.savestep=0
 
     def wandb_log(self,
@@ -85,7 +87,7 @@ class Logger:
             last=False):
         if self.log_wandb and (state.step % self.log_interval == 0 or val_metrics is not None):
             self.wandb_log(state,train_metrics,val_metrics)
-        if val_metrics is not None: 
+        if val_metrics is not None and self.save_checkpoints: 
             self.savestep = self.savestep+1
             if (self.savestep % self.save_interval == 0) or last:
                 self.save_checkpoint(state,train_metrics,val_metrics)
