@@ -4,14 +4,16 @@ import numpy as np
 import optax
 import os
 
-from config import Parameters,sample_parameters
-from datasets.dropclassdataset import load_dataset,drop_class_from_datasets, get_dataloaders
-from losses import CrossEntropyLoss
-from logger import Logger
-from models.models import get_model
-from train import Updater
+from model_zoo_jax.config import Parameters,sample_parameters
+#from model_zoo_jax.datasets.dropclassdataset import load_dataset,drop_class_from_datasets, get_dataloaders
+from model_zoo_jax.datasets.nontorch_dropclassdataset import load_dataset,drop_class_from_datasets, get_dataloaders
+from model_zoo_jax.losses import CrossEntropyLoss
+from model_zoo_jax.logger import Logger
+from model_zoo_jax.models.models import get_model
+from model_zoo_jax.train import Updater
 
 import argparse
+import time
 
 #ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 #os.chdir(ROOT_PATH)
@@ -42,6 +44,7 @@ if __name__=='__main__':
     datasets_full = load_dataset(args.dataset)
     
     for z in range(args.num_models):
+        start = time.time()
         # config
         key, subkey = jax.random.split(key)
         subkey, zoo_config = sample_parameters(subkey,args.dataset,
@@ -59,6 +62,8 @@ if __name__=='__main__':
         # drop class
         datasets = drop_class_from_datasets(datasets_full, zoo_config.class_dropped)
         dataloaders = get_dataloaders(datasets, zoo_config.batch_size)
+        
+        loading_time=time.time()
         
         # model
         model,is_batch = get_model(zoo_config)
@@ -94,12 +99,14 @@ if __name__=='__main__':
                         log_wandb=args.log_wandb,
                         save_interval=args.checkpoint_save_interval)
         logger.init()
+        
+        setup_time=time.time()
 
         #training loop
         for epoch in range(zoo_config.num_epochs):
             train_all_acc = []
             train_all_loss = []
-            for batch in dataloaders['train']:
+            for i,batch in enumerate(dataloaders['train']):
                 state, train_metrics = updater.train_step(state, batch)
                 logger.log(state, train_metrics)
                 train_all_acc.append(train_metrics['train/acc'].item())
@@ -108,13 +115,15 @@ if __name__=='__main__':
                 
             test_acc = []
             test_loss = []
-            for batch in dataloaders['test']:
+            for i,batch in enumerate(dataloaders['test']):
                 state, test_metrics = updater.val_step(state, batch)
                 test_acc.append(test_metrics['val/acc'].item())
                 test_loss.append(test_metrics['val/loss'].item())
             test_metrics = {'test/acc':np.mean(test_acc), 'test/loss':np.mean(test_loss)}
             logger.log(state, train_metrics, test_metrics,last=(epoch==zoo_config.num_epochs-1))
             
-        print("Trained model no. {}: class missing: {}, final train_acc: {}, final test_acc: {}"
-              .format(z,zoo_config.class_dropped,train_metrics['train/acc'],test_metrics['test/acc']))
+        end = time.time()
+        print("Trained model no. {} (time:{:.2f}, loading:{:.2f}, setup:{:.2f}):\
+              class missing: {}, final train_acc: {}, final test_acc: {}"
+              .format(z,end-start,loading_time-start,setup_time-start,zoo_config.class_dropped,train_metrics['train/acc'],test_metrics['test/acc']))
                     
