@@ -71,20 +71,19 @@ def get_dataloaders(datasets: dict, batch_size:int, rng:random.PRNGKey = random.
         if key=='train':
             dataloaders[key] = list(dataloader(rng, value, batch_size, shuffle=shuffle_train, drop_last=True))
         else:
-            dataloaders[key] = list(dataloader(rng, value, batch_size, shuffle=False, drop_last=True))   
+            dataloaders[key] = list(dataloader(rng, value, batch_size, shuffle=False, drop_last=True)) 
     return dataloaders
 
 if __name__=="__main__":
     
     datasets_full = load_dataset('MNIST')
     datasets = drop_class_from_datasets(datasets_full, 0)
-    dataloaders = get_dataloaders(datasets, 32)
     
-    for epoch in range(3):
-        for i,(img,label) in enumerate(dataloaders['train']):
-            if i%100==0:
-                print(i)
-            if epoch==2:
-                print(img[0])
-                print(label)
-                exit(0)
+    
+    for a in range(170):
+        dataloaders = get_dataloaders(datasets, 32)
+        for epoch in range(170):
+            j=0
+            for i,(img,label) in enumerate(dataloaders['train']):
+                j = j +1
+        print(a)

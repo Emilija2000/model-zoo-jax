@@ -86,10 +86,6 @@ if __name__=='__main__':
         else:
             raise ValueError('Unsupported optimizer')
     
-        # updater
-        updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
-        state = updater.init_params(rng=zoo_config.seed,x=init_x)
-    
         # logger
         checkpoints_subdir = "seed_"+str(args.seed)+"_iter_"+str(z)
         checkpoint_dir=os.path.join("checkpoints",args.zoo_name,checkpoints_subdir)
@@ -101,6 +97,10 @@ if __name__=='__main__':
         logger.init()
         
         setup_time=time.time()
+
+        # updater
+        updater = Updater(opt=optimizer, evaluator=evaluator, model_init=model.init)
+        state = updater.init_params(rng=zoo_config.seed,x=init_x)
 
         #training loop
         for epoch in range(zoo_config.num_epochs):
@@ -121,9 +121,10 @@ if __name__=='__main__':
                 test_loss.append(test_metrics['val/loss'].item())
             test_metrics = {'test/acc':np.mean(test_acc), 'test/loss':np.mean(test_loss)}
             logger.log(state, train_metrics, test_metrics,last=(epoch==zoo_config.num_epochs-1))
-            
+        
         end = time.time()
-        print("Trained model no. {} (time:{:.2f}, loading:{:.2f}, setup:{:.2f}):\
-              class missing: {}, final train_acc: {}, final test_acc: {}"
+        print("Trained model no. {} (time:{:.2f}, loading:{:.2f}, setup:{:.2f}):\t class missing: {}, final train_acc: {}, final test_acc: {}"
               .format(z,end-start,loading_time-start,setup_time-start,zoo_config.class_dropped,train_metrics['train/acc'],test_metrics['test/acc']))
-                    
+        #print(zoo_config)
+                  
+        del updater, logger, evaluator

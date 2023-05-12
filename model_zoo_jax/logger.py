@@ -42,8 +42,8 @@ class Logger:
     save_interval: Optional[int] = 20
     
     def init(self,is_save_config=True):
-        wandb.init(config=self.config, project=self.name, 
-                   mode="online" if self.log_wandb else "disabled")
+        if self.log_wandb:
+            wandb.init(config=self.config, project=self.name)
         if is_save_config:
             self.save_config()
         self.savestep=0
