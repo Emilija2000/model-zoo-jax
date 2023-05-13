@@ -1,6 +1,8 @@
 import haiku as hk
 from haiku.initializers import *
 
+import jax.numpy as jnp
+
 from meta_transformer.utils import process_datapoint
 
 from models.cnn import *
@@ -29,6 +31,8 @@ def get_model(config):
         raise ValueError("Unknown model name")
  
 def forward_with_augment(x, is_training, config):
+    if len(x.shape)==2:
+        x=jnp.expand_dims(x,2)
     x = process_datapoint(hk.next_rng_key(),x,augment=config.augment if is_training else False)
     y = get_forward(config)(x, is_training)
     return y

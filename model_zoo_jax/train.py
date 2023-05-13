@@ -7,10 +7,8 @@ import jax.numpy as jnp
 import optax
 from typing import Callable, Tuple
 
-from losses import Evaluator
-from utils import TrainState
-
-from config import Parameters
+from model_zoo_jax.losses import Evaluator
+from model_zoo_jax.utils import TrainState
     
 @dataclass(frozen=True)  # needs to be immutable to be hashable
 class Updater: 
@@ -24,7 +22,7 @@ class Updater:
         """Initializes state of the updater."""
         out_rng, k0 = jax.random.split(rng)
         params = self.model_init(rng=k0, x=x, is_training=True)
-        if len(params)==2:
+        if isinstance(params, tuple) and len(params)==2:
             params,model_state=params
         else:
             model_state=None

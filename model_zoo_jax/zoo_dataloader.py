@@ -2,11 +2,14 @@ from model_zoo_jax.logger import model_restore
 import json
 import jax.numpy as jnp
 import jax
+from jax import random
+from typing import Tuple, Union, Optional
 import os
 
 unmap_info = {
     "dataset": {
         "CIFAR10": 0,
+        "MNIST": 1,
     },
     "batch_size": {
         32: 0,
@@ -46,8 +49,12 @@ unmap_info = {
     }
 }
 
-def insert_all_targets(all_labels_dict, config_dict, metrics_dict,
-                       without = ["data_mean","data_std","seed"]):
+def insert_all_targets(all_labels_dict: dict, config_dict:dict, metrics_dict:dict,
+                       without:Optional[list] = ["data_mean","data_std","seed"]) -> dict:
+    """
+    Helper function: adds targets from all keys in config and metrics dictionaries,
+    except for those specified by 'without'.
+    """
     if len(all_labels_dict)==0:
         tasks = list(config_dict.keys()) + list(metrics_dict.keys())
         all_labels_dict = {key:[] for key in tasks if key not in without}
@@ -69,10 +76,20 @@ def flatten_net(net):
     net = jnp.concatenate(net)
     return net
 
-def load_nets(n=500, 
-              data_dir='checkpoints/cifar10_lenet5_fixed_zoo', 
-              flatten=True, 
-              verbose=True):
+def load_nets(n:int=500, 
+              data_dir:str='checkpoints/cifar10_lenet5_fixed_zoo', 
+              flatten:bool=True,
+              num_checkpoints:int =None,):
+    """
+    Load up to n networks from the model zoo, with all targets (hyperparameters 
+    from config.json and metrics from specific training checkpoints). 
+    
+    Arguments:
+        n (int): Number of checkpoints to load. If n==None, load all.
+        data_dir (str): Path to model zoo created by running zoo.py 
+        flatten (bool): If flatten=True return jnp.array of flattened network weights, otherwise return a list
+                        of dicts (param trees)
+    """
     
     labels = {}
     
@@ -84,6 +101,7 @@ def load_nets(n=500,
         if i == 0:
             continue
         subdir, dirs, files = dir_info
+        dirs.sort(reverse=True) #the newest first
         
         # read config file
         for file_name in files:
@@ -92,14 +110,12 @@ def load_nets(n=500,
                     current_config = json.load(f)
             
         # iterate through different epochs
+        checkp = 0
         for dir_name in dirs:
             # load this model checkpoint
             dir_name = os.path.join(subdir,dir_name)
             net = model_restore(dir_name)
-            #if has_nans(net):
-            #    if verbose:
-            #        print("Not loading params at:", dir_name, "since it contains nan values")
-            #    continue
+            
             # load train/test acc/loss
             with open(os.path.join(dir_name,"metrics.json"), 'r') as f:
                 metrics = json.load(f)
@@ -107,9 +123,13 @@ def load_nets(n=500,
             # append 
             nets.append(net)   
             labels = insert_all_targets(labels,current_config,metrics)
-                 
+                
+            checkp = checkp+1 
+            if (num_checkpoints is not None) and (checkp >= num_checkpoints):
+                break
             if n is not None and len(nets) == n:
                 break
+            
         if n is not None and len(nets) == n:
             break
     print("Loaded", len(nets), "network parameters")
@@ -126,11 +146,48 @@ def load_nets(n=500,
 
     return data_nets, processed_labels
 
+def shuffle_data(rng: jnp.ndarray, 
+                 inputs: Union[jnp.ndarray,list], 
+                 labels: Union[jnp.ndarray,dict],
+                 chunks=None) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Shuffle the data. Can handle flattened and unflattened network weights. 
+    If type(labels)==dict, shuffle all target arrays
+    If chunks!=None then be careful not to separate models from the same chunk -
+    same training run"""
+    if chunks is not None:
+        index = jnp.arange(len(inputs)/chunks)
+        index = random.permutation(rng,index)
+        expanded_index = []
+        for i in index:
+            for j in range(chunks):
+                expanded_index.append(i*chunks+j)
+        index = jnp.array(expanded_index,dtype=jnp.int32)
+    else:
+        index = jnp.arange(len(inputs))
+        index = random.permutation(rng,index)
+    
+    if type(inputs==list):
+        inputs_new = [inputs[i] for i in index]
+        inputs = inputs_new
+    else:
+        inputs = inputs[index]
+        
+    if type(labels)==dict:
+        for key in labels.keys():
+            labels[key] = labels[key][index]
+    else:
+        labels = labels[index]
+    return inputs, labels
+
 if __name__=="__main__":
     
-    data,labels = load_nets(n=3,flatten=True)
+    data,labels = load_nets(n=16,flatten=False)
+    
     print(type(data))
     print(labels['class_dropped'])
     print(type(data[0]))
     print(len(data[0]))
-    print(data[0])
+    
+    data,labels = shuffle_data(random.PRNGKey(42),data,labels,chunks=4)
+    print(labels['class_dropped'])
+    
