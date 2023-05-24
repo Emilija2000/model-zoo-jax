@@ -1,8 +1,8 @@
 from setuptools import setup
 
-setup(name='meta-transformer',
-      version='0.0.1',
-      packages=["meta_transformer"],
+setup(name='model-zoo-jax',
+      version='1.0.0',
+      packages=["model_zoo_jax"],
       install_requires=[
         "chex",
         "datasets",
