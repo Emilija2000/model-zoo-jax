@@ -146,6 +146,33 @@ def load_nets(n:int=500,
 
     return data_nets, processed_labels
 
+def load_multiple_datasets(dirs,num_networks, num_checkpoints):
+    """
+    Load up to networks from multiple model zoos, with all targets (hyperparameters 
+    from config.json and metrics from specific training checkpoints). The networks will 
+    be loaded as params dicts
+    
+    Arguments:
+        dirs (list): List of paths to different model zoo dirs to load
+        num_networks (int): Number of checkpoints to load from each zoo. If n==None, load all.
+        num_checkpoints (int): Number of checkpoints from a single training run
+    """
+    inputs_all = []
+    all_labels_all = {}
+    for dir in dirs:
+        print(f"Loading model zoo: {dir}")
+        inputs, all_labels = load_nets(n=num_networks, 
+                                   data_dir=dir,
+                                   flatten=False,
+                                   num_checkpoints=num_checkpoints)
+        inputs_all = inputs_all+inputs
+        if len(all_labels_all)==0:
+            all_labels_all = all_labels
+        else:
+            all_labels_all = {key: jnp.stack(all_labels_all[key],all_labels[key],axis=0) for key in all_labels.keys()}
+
+    return inputs_all, all_labels_all
+
 def shuffle_data(rng: jnp.ndarray, 
                  inputs: Union[jnp.ndarray,list], 
                  labels: Union[jnp.ndarray,dict],
