@@ -89,7 +89,10 @@ def load_nets(n:int=500,
         data_dir (str): Path to model zoo created by running zoo.py 
         flatten (bool): If flatten=True return jnp.array of flattened network weights, otherwise return a list
                         of dicts (param trees)
+        num_checkpoints (int): How many checkpoints from the same train run to load. If None read all. Nonvalid input 0 is converted to 1.
     """
+    if num_checkpoints == 0:
+        num_checkpoints = 1
     
     labels = {}
     

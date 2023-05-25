@@ -1,4 +1,4 @@
-from logger import Logger
+from logger import Logger, model_save, model_restore
 from losses import CrossEntropyLoss, MSELoss, Evaluator
 from train import Updater
 from utils import TrainState
