@@ -79,7 +79,8 @@ def flatten_net(net):
 def load_nets(n:int=500, 
               data_dir:str='checkpoints/cifar10_lenet5_fixed_zoo', 
               flatten:bool=True,
-              num_checkpoints:int =None,):
+              num_checkpoints:int =None,
+              verbose:bool = False):
     """
     Load up to n networks from the model zoo, with all targets (hyperparameters 
     from config.json and metrics from specific training checkpoints). 
@@ -135,7 +136,8 @@ def load_nets(n:int=500,
             
         if n is not None and len(nets) == n:
             break
-    print("Loaded", len(nets), "network parameters")
+    if verbose:
+        print("Loaded", len(nets), "network parameters")
 
     if flatten:
         data_nets = [flatten_net(net) for net in nets] 
@@ -149,7 +151,7 @@ def load_nets(n:int=500,
 
     return data_nets, processed_labels
 
-def load_multiple_datasets(dirs,num_networks, num_checkpoints):
+def load_multiple_datasets(dirs,num_networks=None, num_checkpoints=None,verbose=False):
     """
     Load up to networks from multiple model zoos, with all targets (hyperparameters 
     from config.json and metrics from specific training checkpoints). The networks will 
@@ -158,12 +160,13 @@ def load_multiple_datasets(dirs,num_networks, num_checkpoints):
     Arguments:
         dirs (list): List of paths to different model zoo dirs to load
         num_networks (int): Number of checkpoints to load from each zoo. If n==None, load all.
-        num_checkpoints (int): Number of checkpoints from a single training run
+        num_checkpoints (int): Number of checkpoints from a single training run, default: all
     """
     inputs_all = []
     all_labels_all = {}
     for dir in dirs:
-        print(f"Loading model zoo: {dir}")
+        if verbose:
+            print(f"Loading model zoo: {dir}")
         inputs, all_labels = load_nets(n=num_networks, 
                                    data_dir=dir,
                                    flatten=False,
@@ -172,7 +175,7 @@ def load_multiple_datasets(dirs,num_networks, num_checkpoints):
         if len(all_labels_all)==0:
             all_labels_all = all_labels
         else:
-            all_labels_all = {key: jnp.stack(all_labels_all[key],all_labels[key],axis=0) for key in all_labels.keys()}
+            all_labels_all = {key: jnp.concatenate([all_labels_all[key],all_labels[key]],axis=0) for key in all_labels.keys()}
 
     return inputs_all, all_labels_all
 
@@ -183,8 +186,14 @@ def shuffle_data(rng: jnp.ndarray,
     """Shuffle the data. Can handle flattened and unflattened network weights. 
     If type(labels)==dict, shuffle all target arrays
     If chunks!=None then be careful not to separate models from the same chunk -
-    same training run"""
+    same training run
+    As default behaviour, omits last part if len(inputs)%chunks!=0"""
     if chunks is not None:
+        if len(inputs)%chunks!=0:
+            a = len(inputs)%chunks
+            inputs = inputs[:-a]
+            labels = {key: value[:-a] for key,value in labels.items()}
+        
         index = jnp.arange(len(inputs)/chunks)
         index = random.permutation(rng,index)
         expanded_index = []

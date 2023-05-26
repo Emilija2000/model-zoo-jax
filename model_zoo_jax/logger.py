@@ -11,6 +11,8 @@ import wandb
 
 def model_save(ckpt_dir: str, state) -> None:
     "credit: https://github.com/deepmind/dm-haiku/issues/18?fbclid=IwAR0aSk2OgYCIn3YKFrDoEnSYU1xRYzywuypVQlunsZHn2w5y1vpN9_b8QXM"
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
     with open(os.path.join(ckpt_dir, "arrays.npy"), "wb") as f:
         for x in jax.tree_util.tree_leaves(state):
             np.save(f, x, allow_pickle=False)

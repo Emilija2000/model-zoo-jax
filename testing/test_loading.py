@@ -17,21 +17,21 @@ def test_zoo_loading(data_dir):
         # all read and flattened correctly
         data,labels = load_nets(n, data_dir, flatten=True)
         chex.assert_axis_dimension(data,0,n)
-        chex.assert_equal_size([data[i] for i in data.shape[0]])
+        chex.assert_equal_shape([data[i] for i in range(n)])
     
     for c in [1, 2, 4]:
         # exact number of models from the same subfolder
         data,labels = load_nets(16, data_dir, flatten=False, num_checkpoints=c)
         labels = labels['class_dropped']
         current = labels[0]
-        c0 = c
+        c0 = c-1
         for n in range(16):
             if c0 > 0:
                 assert current == labels[n]
                 c0 = c0-1
             else:
-                c0 = c
-            current = labels[n]
+                c0 = c-1
+                current = labels[n+1] if n+1<len(labels) else 0
 
 def test_multizoo_loading(path_with_img_dataset1, path_with_img_dataset2):
     # all datasets are read in correct order
@@ -41,10 +41,10 @@ def test_multizoo_loading(path_with_img_dataset1, path_with_img_dataset2):
     
     for i in range(n):
         assert labels[i] == labels[0]
-    chex.assert_trees_all_equal_sizes(data[:n])
+    chex.assert_trees_all_equal_shapes(*data[:n])
     for i in range(n,2*n):
         assert labels[i] == labels[n]
-    chex.assert_trees_all_equal_sizes(data[n:])
+    chex.assert_trees_all_equal_shapes(*data[n:])
 
 def test_shuffle(data_dir):
     # same rng same shuffle
@@ -94,7 +94,9 @@ def test_model_save_load():
     chex.assert_trees_all_close(*trees, rtol=1e-06)
 
 if __name__=='__main__':
-    test_zoo_loading()
-    test_multizoo_loading()
-    test_shuffle()
+    dataset1 = '../THESIS_first_old_path/model_zoo_jax/checkpoints/mnist_smallCNN_fixed_zoo'
+    dataset2 = '../THESIS_first_old_path/model_zoo_jax/checkpoints/cifar10_lenet5_fixed_zoo'
+    test_zoo_loading(dataset1)
+    test_multizoo_loading(dataset1,dataset2)
+    test_shuffle(dataset1)
     test_model_save_load()
