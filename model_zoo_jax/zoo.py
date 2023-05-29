@@ -36,6 +36,7 @@ if __name__=='__main__':
     parser.add_argument("--lr",type=float,default=None)
     parser.add_argument("--optimizer",type=str,default=None)
     parser.add_argument("--checkpoint_save_interval",type=int,default=20)
+    parser.add_argument('--root_checkpoint_dir',type=str,default='checkpoints')
     args = parser.parse_args()
     
     key = jax.random.PRNGKey(args.seed)
@@ -88,7 +89,7 @@ if __name__=='__main__':
     
         # logger
         checkpoints_subdir = "seed_"+str(args.seed)+"_iter_"+str(z)
-        checkpoint_dir=os.path.join("checkpoints",args.zoo_name,checkpoints_subdir)
+        checkpoint_dir=os.path.join(args.root_checkpoint_dir,args.zoo_name,checkpoints_subdir)
         logger = Logger(name=args.zoo_name+"_"+str(z), 
                         checkpoint_dir=checkpoint_dir, 
                         config=zoo_config,log_interval=500,

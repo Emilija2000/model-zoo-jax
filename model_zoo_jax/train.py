@@ -21,7 +21,7 @@ class Updater:
     def init_params(self, rng: jnp.ndarray, x:jnp.ndarray) -> dict:
         """Initializes state of the updater."""
         out_rng, k0 = jax.random.split(rng)
-        params = self.model_init(rng=k0, x=x, is_training=True)
+        params = self.model_init(k0, x, is_training=True)
         if isinstance(params, tuple) and len(params)==2:
             params,model_state=params
         else:

@@ -1,18 +1,19 @@
 from model_zoo_jax.datasets.mnist import mnist_raw
+from model_zoo_jax.datasets.cifar import cifar10_raw
 from typing import Tuple
 import jax.numpy as jnp
 from jax import random
 from jax.random import permutation
 
 def load_dataset(name=str):
-    #if name == "CIFAR10":
-    #    train_dataset = CIFAR10(root='datasets/cifar10/train_cifar10', train=True, download=True, transform=custom_transform, target_transform=custom_target_transform)
-    #    test_dataset = CIFAR10(root='datasets/cifar10/test_cifar10', train=False, download=True, transform=custom_transform,target_transform =custom_target_transform)
+    if name == "CIFAR10":
+        train_images, train_labels, test_images, test_labels = cifar10_raw()
+        train_dataset = (jnp.array(train_images,dtype=jnp.float32),jnp.array(train_labels))
+        test_dataset = (jnp.array(test_images,dtype=jnp.float32),jnp.array(test_labels))
     #elif name == "CIFAR100":
     #    train_dataset = CIFAR100(root='datasets/cifar100/train_cifar100', train=True, download=True, transform=custom_transform, target_transform=custom_target_transform)
     #    test_dataset = CIFAR100(root='datasets/cifar100/test_cifar100', train=False, download=True, transform=custom_transform,target_transform =custom_target_transform)
-    #elif name == "MNIST":
-    if name == "MNIST":
+    elif name == "MNIST":
         train_images, train_labels, test_images, test_labels = mnist_raw()
         train_dataset = (jnp.array(train_images,dtype=jnp.float32),jnp.array(train_labels))
         test_dataset = (jnp.array(test_images,dtype=jnp.float32),jnp.array(test_labels))
@@ -76,14 +77,17 @@ def get_dataloaders(datasets: dict, batch_size:int, rng:random.PRNGKey = random.
 
 if __name__=="__main__":
     
-    datasets_full = load_dataset('MNIST')
+    datasets_full = load_dataset('CIFAR10')
     datasets = drop_class_from_datasets(datasets_full, 0)
     
-    
-    for a in range(170):
+    flag = False
+    for a in range(2):
         dataloaders = get_dataloaders(datasets, 32)
-        for epoch in range(170):
+        for epoch in range(100):
             j=0
             for i,(img,label) in enumerate(dataloaders['train']):
+                if not flag:
+                    print(img.shape, label)
+                    flag = True
                 j = j +1
         print(a)

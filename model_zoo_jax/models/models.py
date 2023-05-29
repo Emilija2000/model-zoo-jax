@@ -1,12 +1,46 @@
 import haiku as hk
 from haiku.initializers import *
 
+import jax
 import jax.numpy as jnp
-
-from meta_transformer.utils import process_datapoint
 
 from models.cnn import *
 from models.resnet import *
+
+import dm_pix as pix
+
+def random_rot90(rng, image):
+    """randomly rotate the image 50% of the time"""
+    rot = jax.random.bernoulli(rng, 0.5)
+    return jax.lax.cond(
+        rot,
+        lambda img: pix.rot90(img, 1),
+        lambda img: img,
+        image
+    )
+
+def augment_datapoint(rng, img):
+    """Apply a random augmentation to a single image. Pixel values are assumed to be in [0, 1]"""
+    rng = jax.random.split(rng, 7)
+#    img = pix.random_brightness(rng[0], img, 0.3)
+#    img = pix.random_contrast(rng[1], img, lower=0.2, upper=3)
+#    img = pix.random_saturation(rng[2], img, lower=0, upper=3)
+    img = pix.random_flip_left_right(rng[2], img)
+    img = pix.random_flip_up_down(rng[3], img)
+    img = random_rot90(rng[4], img)
+    return img
+
+def process_datapoint(rng: jnp.ndarray, 
+                      img: jnp.array,
+                      augment: bool = True) -> jnp.array:
+    img = img / 255.0
+    img = jax.lax.cond(  # Random augment?
+            augment, 
+            lambda img: augment_datapoint(rng, img),
+            lambda img: img,
+            img
+        )
+    return img
 
 def get_initializer(name):
     if name is None:

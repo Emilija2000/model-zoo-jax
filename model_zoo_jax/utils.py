@@ -11,3 +11,4 @@ class TrainState:
     opt_state: OptState
     params: dict
     model_state: Optional[Tuple[jnp.array]] = None
+    
