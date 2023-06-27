@@ -12,10 +12,12 @@ unmap_info = {
         "MNIST": 1,
     },
     "batch_size": {
-        32: 0,
-        64: 1,
-        128: 2,
-        256: 3,
+        8: 0,
+        16: 1,
+        32: 2,
+        64: 3,
+        128: 4,
+        256: 5,
     },
     "augment": {
         True: 0,
@@ -34,11 +36,11 @@ unmap_info = {
         "silu": 4,
         "gelu": 5
     },
-    "initialization": {
-        None: 0,
-        "U": 1,
-        "N": 2,
-        "TN": 3,
+    "init": {
+        'U': 1,
+        'N': 2,
+        'TN': 3,
+        None: 0
     },
     "model_name":{
         "smallCNN":0,
@@ -151,7 +153,7 @@ def load_nets(n:int=500,
 
     return data_nets, processed_labels
 
-def load_multiple_datasets(dirs,num_networks=None, num_checkpoints=None,verbose=False):
+def load_multiple_datasets(dirs,num_networks=None, num_checkpoints=None,verbose=False,bs=None):
     """
     Load up to networks from multiple model zoos, with all targets (hyperparameters 
     from config.json and metrics from specific training checkpoints). The networks will 
@@ -171,6 +173,10 @@ def load_multiple_datasets(dirs,num_networks=None, num_checkpoints=None,verbose=
                                    data_dir=dir,
                                    flatten=False,
                                    num_checkpoints=num_checkpoints)
+        if bs!=None:
+            num = len(inputs)//bs * bs
+            inputs = inputs[:num]
+            all_labels = {key: all_labels[key][:num] for key in all_labels.keys()}
         inputs_all = inputs_all+inputs
         if len(all_labels_all)==0:
             all_labels_all = all_labels
@@ -192,7 +198,10 @@ def shuffle_data(rng: jnp.ndarray,
         if len(inputs)%chunks!=0:
             a = len(inputs)%chunks
             inputs = inputs[:-a]
-            labels = {key: value[:-a] for key,value in labels.items()}
+            if type(labels)==dict:
+                labels = {key: value[:-a] for key,value in labels.items()}
+            else:
+                labels = labels[:-a]
         
         index = jnp.arange(len(inputs)/chunks)
         index = random.permutation(rng,index)

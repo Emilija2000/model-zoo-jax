@@ -4,8 +4,8 @@ from haiku.initializers import *
 import jax
 import jax.numpy as jnp
 
-from models.cnn import *
-from models.resnet import *
+from model_zoo_jax.models.cnn import *
+from model_zoo_jax.models.resnet import *
 
 import dm_pix as pix
 

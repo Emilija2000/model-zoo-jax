@@ -70,7 +70,6 @@ def unpickle(file):
 
 def load_cifar10():
     folder = _DATA+"cifar-10-batches-py"
-    print('here')
     # Load training data
     train_images, train_labels = [], []
     for batch in range(1, 6):
@@ -106,7 +105,7 @@ def load_cifar10():
 def cifar10_raw():
     """Download and parse the raw CIFAR10 dataset."""
     tar_filename = _DATA+"cifar-10-python.tar.gz"
-    extract_folder = _DATA
+    extract_folder = _DATA+"cifar-10-batches-py"
 
     if download_cifar10():
         if extract_tar(tar_filename, extract_folder):
