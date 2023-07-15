@@ -55,8 +55,8 @@ class CrossEntropyLoss(Evaluator):
 
 class MSELoss(Evaluator):
     def r_squared_score(self, predictions, targets):
-        ss_res = jnp.sum((targets - predictions)**2)
-        ss_tot = jnp.sum((targets - jnp.mean(targets))**2)
+        ss_res = jnp.sum(jnp.square(targets - predictions))
+        ss_tot = jnp.sum(jnp.square(targets - jnp.mean(targets)))
         r_squared = 1.0 - (ss_res / ss_tot)
         return r_squared
 

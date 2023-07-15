@@ -5,6 +5,7 @@ import jax
 from jax import random
 from typing import Tuple, Union, Optional
 import os
+from math import ceil
 
 unmap_info = {
     "dataset": {
@@ -174,11 +175,11 @@ def load_multiple_datasets(dirs,num_networks=None, num_checkpoints=None,verbose=
                                    flatten=False,
                                    num_checkpoints=num_checkpoints)
         if bs!=None:
-            num = len(inputs)//bs * bs
+            num = ceil(len(inputs)/bs) * bs
             inputs = inputs[:num]
             all_labels = {key: all_labels[key][:num] for key in all_labels.keys()}
         inputs_all = inputs_all+inputs
-        if len(all_labels_all)==0:
+        if len(all_labels_all.keys())==0:
             all_labels_all = all_labels
         else:
             all_labels_all = {key: jnp.concatenate([all_labels_all[key],all_labels[key]],axis=0) for key in all_labels.keys()}
@@ -202,14 +203,21 @@ def shuffle_data(rng: jnp.ndarray,
                 labels = {key: value[:-a] for key,value in labels.items()}
             else:
                 labels = labels[:-a]
-        
-        index = jnp.arange(len(inputs)/chunks)
+
+        ''' index = jnp.arange(len(inputs)/chunks)
         index = random.permutation(rng,index)
         expanded_index = []
         for i in index:
             for j in range(chunks):
                 expanded_index.append(i*chunks+j)
-        index = jnp.array(expanded_index,dtype=jnp.int32)
+        index = jnp.array(expanded_index,dtype=jnp.int32)'''
+
+        n_batches = len(inputs)//chunks
+        index = jnp.arange(n_batches)
+        index = random.permutation(rng, index)
+        expanded_index = jnp.repeat(index, chunks) * chunks + jnp.tile(jnp.arange(chunks), n_batches)
+        index = expanded_index.astype(jnp.int32)
+        
     else:
         index = jnp.arange(len(inputs))
         index = random.permutation(rng,index)
