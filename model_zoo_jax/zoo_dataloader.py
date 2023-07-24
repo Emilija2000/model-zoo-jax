@@ -3,7 +3,9 @@ import json
 import jax.numpy as jnp
 import jax
 from jax import random
-from typing import Tuple, Union, Optional
+from jax.typing import ArrayLike
+import numpy as np
+from typing import Tuple, Union, Optional, List
 import os
 from math import ceil
 
@@ -234,6 +236,80 @@ def shuffle_data(rng: jnp.ndarray,
     else:
         labels = labels[index]
     return inputs, labels
+
+###################################
+# Load train, val, test split with single task directly 
+
+def split_data(data: list, labels: list, is_val:bool=True, chunks:int=1):
+    if is_val:
+        split_index = int(len(data)*0.7)
+        split_index -= split_index % chunks
+        split_index_1 = int(len(data)*0.85)
+        split_index_1 -= split_index_1 % chunks
+        return (data[:split_index], labels[:split_index], 
+                data[split_index:split_index_1], labels[split_index:split_index_1],
+                data[split_index_1:], labels[split_index_1:])
+    else:
+        split_index = int(len(data)*0.8)
+        split_index -= split_index % chunks
+        return (data[:split_index], labels[:split_index], 
+            data[split_index:], labels[split_index:])
+
+def flatten(x):
+    return jax.flatten_util.ravel_pytree(x)[0]
+
+def is_fine(params: dict):
+    """Return false if std or mean is too high."""
+    flat = flatten(params)
+    if flat.std() > 5.0 or jnp.abs(flat.mean()) > 5.0:
+        return False
+    else:
+        return True
+
+def filter_data(data: List[dict], labels: List[ArrayLike]):
+    """Given a list of net params, filter out those
+    with very large means or stds."""
+    assert len(data) == len(labels)
+    f_data, f_labels = zip(*[(x, y) for x, y in zip(data, labels) if is_fine(x)])
+    print(f"Filtered out {len(data) - len(f_data)} nets.\
+          That's {100*(len(data) - len(f_data))/len(data):.2f}%.")
+    return np.array(f_data), np.array(f_labels)
+
+def load_data(rng,
+              path: str,
+              task: str, 
+              n:int,
+              num_checkpoints: int=1,
+              is_flatten:bool=False,
+              is_val:bool=True, 
+              is_filter:bool=False, 
+              verbose:bool=True):
+    if verbose:
+        print(f"Loading model zoo: {path}")
+    inputs, all_labels = load_nets(n=n, 
+                                   data_dir=path,
+                                   flatten=is_flatten,
+                                   num_checkpoints=num_checkpoints)
+    if verbose:
+        print(f"Training task: {task}.")
+    labels = all_labels[task]
+    
+    if is_filter:
+        # Filter (high variance)
+        inputs, labels = filter_data(inputs, labels)
+    
+     # Shuffle checkpoints before splitting
+    rng, subkey = random.split(rng)
+    inputs, labels = shuffle_data(subkey,inputs,labels,chunks=num_checkpoints)
+    
+    if is_val:
+        train_inputs, train_labels, val_inputs, val_labels, test_inputs, test_labels = split_data(inputs,labels,is_val=True,chunks=num_checkpoints)
+    else:
+        train_inputs, train_labels, val_inputs, val_labels = split_data(inputs, labels,is_val=False,chunks=num_checkpoints)
+    
+    if is_val:
+        return train_inputs, train_labels, val_inputs, val_labels, test_inputs,test_labels
+    return train_inputs, train_labels, val_inputs, val_labels
 
 if __name__=="__main__":
     
