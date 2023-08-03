@@ -246,14 +246,39 @@ def split_data(data: list, labels: list, is_val:bool=True, chunks:int=1):
         split_index -= split_index % chunks
         split_index_1 = int(len(data)*0.85)
         split_index_1 -= split_index_1 % chunks
-        return (data[:split_index], labels[:split_index], 
-                data[split_index:split_index_1], labels[split_index:split_index_1],
-                data[split_index_1:], labels[split_index_1:])
+        
+        if type(labels)==dict:
+            labels_train = {}
+            labels_val = {}
+            labels_test = {}
+            for key in labels.keys():
+                labels_train[key] = labels[key][:split_index]
+                labels_val[key] = labels[key][split_index:split_index_1]
+                labels_test[key] = labels[key][split_index_1:]
+        else:
+            labels_train = labels[:split_index]
+            labels_val = labels[split_index:split_index_1]
+            labels_test = labels[split_index_1:]
+        
+        return (data[:split_index], labels_train, 
+                data[split_index:split_index_1], labels_val,
+                data[split_index_1:], labels_test)
     else:
         split_index = int(len(data)*0.8)
         split_index -= split_index % chunks
-        return (data[:split_index], labels[:split_index], 
-            data[split_index:], labels[split_index:])
+        
+        if type(labels)==dict:
+            labels_train = {}
+            labels_test = {}
+            for key in labels.keys():
+                labels_train[key] = labels[key][:split_index]
+                labels_test[key] = labels[key][split_index:]
+        else:
+            labels_train = labels[:split_index]
+            labels_test = labels[split_index:]
+        
+        return (data[:split_index], labels_train, 
+            data[split_index:], labels_test)
 
 def flatten(x):
     return jax.flatten_util.ravel_pytree(x)[0]
@@ -290,9 +315,12 @@ def load_data(rng,
                                    data_dir=path,
                                    flatten=is_flatten,
                                    num_checkpoints=num_checkpoints)
-    if verbose:
-        print(f"Training task: {task}.")
-    labels = all_labels[task]
+    if task is not None:
+        if verbose:
+            print(f"Training task: {task}.")
+        labels = all_labels[task]
+    else:
+        labels = all_labels
     
     if is_filter:
         # Filter (high variance)

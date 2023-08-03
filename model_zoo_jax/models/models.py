@@ -57,7 +57,7 @@ def get_initializer(name):
 def get_model(config):
     "second output is signal if model.apply is already batched"
     fcn = lambda x,is_training: forward_with_augment(x, is_training, config)
-    if config.model_name in ["smallCNN","largeCNN","lenet5","alexnet"]:
+    if config.model_name in ["smallCNN","largeCNN","lenet5","alexnet","smallCNN_nopool"]:
         return hk.transform(fcn), False
     elif config.model_name in ["resnet18"]:
         return hk.transform_with_state(fcn), True
@@ -75,6 +75,14 @@ def forward_with_augment(x, is_training, config):
 def get_forward(config):
     if config.model_name=="smallCNN":
         return lambda x, is_training: forward_cnn_small(x, is_training, 
+                                                                      num_cls= config.num_classes,
+                                                                      dropout = config.dropout,
+                                                                      activation=config.activation,
+                                                                      data_mean=config.data_mean,
+                                                                      data_std=config.data_std,
+                                                                      init = get_initializer(config.init))
+    elif config.model_name=="smallCNN_nopool":
+        return lambda x, is_training: forward_cnn_small_nopool(x, is_training, 
                                                                       num_cls= config.num_classes,
                                                                       dropout = config.dropout,
                                                                       activation=config.activation,
@@ -112,7 +120,7 @@ def get_forward(config):
                                                                       data_std=config.data_std,
                                                                       init = get_initializer(config.init))
     else:
-        raise ValueError('Available models are: smallCNN, largeCNN, alexnet, lenet5 and resnet18')
+        raise ValueError('Available models are: smallCNN (and smallCNN_nopool), largeCNN, alexnet, lenet5 and resnet18')
 
 
 

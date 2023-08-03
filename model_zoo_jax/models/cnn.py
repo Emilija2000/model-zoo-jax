@@ -189,7 +189,8 @@ def augment(x, mean, std):
     return x
         
 def forward_cnn_small(x:jnp.array, is_training: bool=True, num_cls=10, dropout=0., activation="leakyrelu", data_mean=0.5, data_std=0.5, init:hk.initializers.Initializer=None):
-    "Small CNN from Model Zoo paper: https://arxiv.org/pdf/2209.14764v1.pdf"
+    """Small CNN from Model Zoo paper: https://arxiv.org/pdf/2209.14764v1.pdf
+    version with pooling in the last conv layer"""
     
     x = augment(x, data_mean, data_std)
     return CNN(output_size=num_cls,
@@ -199,6 +200,21 @@ def forward_cnn_small(x:jnp.array, is_training: bool=True, num_cls=10, dropout=0
                 ConvConfig(channels=8, kernel=5,follow_by_pooling=True, w_init=init, b_init=init),
                 ConvConfig(channels=6, kernel=5,follow_by_pooling=True, w_init=init, b_init=init),
                 ConvConfig(channels=4, kernel=2,follow_by_pooling=True, pooling_stride=1, w_init=init, b_init=init),
+               ],
+             lin_config=[LinConfig(20, w_init=init, b_init=init)]
+            )(x, is_training=is_training)
+    
+def forward_cnn_small_nopool(x:jnp.array, is_training: bool=True, num_cls=10, dropout=0., activation="leakyrelu", data_mean=0.5, data_std=0.5, init:hk.initializers.Initializer=None):
+    """Small CNN from Model Zoo paper: https://arxiv.org/pdf/2209.14764v1.pdf"""
+    
+    x = augment(x, data_mean, data_std)
+    return CNN(output_size=num_cls,
+             nlin=activation,
+             dropout_rate=dropout,
+             conv_config=[
+                ConvConfig(channels=8, kernel=5,follow_by_pooling=True, w_init=init, b_init=init),
+                ConvConfig(channels=6, kernel=5,follow_by_pooling=True, w_init=init, b_init=init),
+                ConvConfig(channels=4, kernel=2,follow_by_pooling=False, pooling_stride=1, w_init=init, b_init=init),
                ],
              lin_config=[LinConfig(20, w_init=init, b_init=init)]
             )(x, is_training=is_training)
